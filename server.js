@@ -8,6 +8,7 @@ const analyticsRoutes = require("./routes/analyticsRoutes");
 const restaurantRoutes = require("./routes/restaurantRoutes");
 const waiterRoutes = require("./routes/waiterRoutes");
 const tagRoutes = require("./routes/tagRoutes");
+const printerRoutes = require("./routes/printerRoutes");
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use('/api/waiters', waiterRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api', printerRoutes);
 
 // Start Server
 const PORT = process.env.PORT || 5000;
