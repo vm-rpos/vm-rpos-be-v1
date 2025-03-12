@@ -1,5 +1,6 @@
 const Category = require('../models/Category');
 const Item = require('../models/Item');
+const Tag = require('../models/Tag');
 
 // Get all categories with their items
 exports.getAllCategories = async (req, res) => {
@@ -7,7 +8,7 @@ exports.getAllCategories = async (req, res) => {
     const categories = await Category.find().sort({ name: 1 });
     const categoriesWithItems = await Promise.all(
       categories.map(async (category) => {
-        const items = await Item.find({ categoryId: category._id });
+        const items = await Item.find({ categoryId: category._id }).populate('tags');
         return { _id: category._id, name: category.name, items };
       })
     );
@@ -43,7 +44,7 @@ exports.getCategoryById = async (req, res) => {
     const category = await Category.findById(req.params.id);
     if (!category) return res.status(404).json({ message: 'Category not found' });
 
-    const items = await Item.find({ categoryId: category._id });
+    const items = await Item.find({ categoryId: category._id }).populate('tags');
     res.json({ _id: category._id, name: category.name, items });
   } catch (err) {
     console.error('Error getting category:', err);
@@ -67,7 +68,7 @@ exports.updateCategory = async (req, res) => {
 
     await Item.updateMany({ categoryId: updatedCategory._id }, { categoryName: name });
 
-    const items = await Item.find({ categoryId: updatedCategory._id });
+    const items = await Item.find({ categoryId: updatedCategory._id }).populate('tags');
     res.json({ _id: updatedCategory._id, name: updatedCategory.name, items });
   } catch (err) {
     console.error('Error updating category:', err);
@@ -90,10 +91,10 @@ exports.deleteCategory = async (req, res) => {
   }
 };
 
-// Add an item to a category
+// Add item to category with tag handling
 exports.addItemToCategory = async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, price, description, tags } = req.body;
     if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
 
     const category = await Category.findById(req.params.id);
@@ -102,10 +103,34 @@ exports.addItemToCategory = async (req, res) => {
     const existingItem = await Item.findOne({ categoryId: category._id, name });
     if (existingItem) return res.status(400).json({ message: 'Item with this name already exists in the category' });
 
-    const newItem = new Item({ name, price, categoryId: category._id, categoryName: category.name });
+    // Handle tags
+    let tagIds = [];
+    if (tags && tags.length > 0) {
+      // Process each tag name
+      for (const tagName of tags) {
+        // Look for existing tag or create a new one
+        let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, 'i') } });
+        
+        if (!tag) {
+          tag = new Tag({ name: tagName });
+          await tag.save();
+        }
+        
+        tagIds.push(tag._id);
+      }
+    }
+
+    const newItem = new Item({ 
+      name, 
+      price, 
+      description: description || "", 
+      tags: tagIds,
+      categoryId: category._id, 
+      categoryName: category.name 
+    });
     await newItem.save();
 
-    const items = await Item.find({ categoryId: category._id });
+    const items = await Item.find({ categoryId: category._id }).populate('tags');
     res.status(201).json({ _id: category._id, name: category.name, items });
   } catch (err) {
     console.error('Error adding item to category:', err);
@@ -113,10 +138,10 @@ exports.addItemToCategory = async (req, res) => {
   }
 };
 
-// Update an item in a category
+// Update item in category with tag handling
 exports.updateItemInCategory = async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, price, description, tags } = req.body;
     if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
 
     const category = await Category.findById(req.params.categoryId);
@@ -128,9 +153,34 @@ exports.updateItemInCategory = async (req, res) => {
     const duplicateItem = await Item.findOne({ categoryId: category._id, name, _id: { $ne: req.params.itemId } });
     if (duplicateItem) return res.status(400).json({ message: 'Another item with this name already exists in the category' });
 
-    await Item.findByIdAndUpdate(req.params.itemId, { name, price, categoryName: category.name });
+    // Handle tags
+    let tagIds = item.tags; // Default to current tags
+    
+    if (tags !== undefined) {
+      tagIds = [];
+      // Process each tag name
+      for (const tagName of tags) {
+        // Look for existing tag or create a new one
+        let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, 'i') } });
+        
+        if (!tag) {
+          tag = new Tag({ name: tagName });
+          await tag.save();
+        }
+        
+        tagIds.push(tag._id);
+      }
+    }
 
-    const updatedItems = await Item.find({ categoryId: category._id });
+    await Item.findByIdAndUpdate(req.params.itemId, { 
+      name, 
+      price, 
+      description: description !== undefined ? description : item.description,
+      tags: tagIds,
+      categoryName: category.name 
+    });
+
+    const updatedItems = await Item.find({ categoryId: category._id }).populate('tags');
     res.json({ _id: category._id, name: category.name, items: updatedItems });
   } catch (err) {
     console.error('Error updating item in category:', err);

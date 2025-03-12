@@ -1,4 +1,3 @@
-// models/Item.js
 const mongoose = require('mongoose');
 
 const ItemSchema = new mongoose.Schema({
@@ -12,6 +11,15 @@ const ItemSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  description: {
+    type: String,
+    default: "",
+    trim: true
+  },
+  tags: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tag'
+  }],
   categoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
