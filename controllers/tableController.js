@@ -86,9 +86,25 @@ exports.updateTable = async (req, res) => {
   try {
     const { name, tableNumber } = req.body;
 
+    if (!name && !tableNumber) {
+      return res.status(400).json({ message: 'At least name or table number must be provided' });
+    }
+
     const updateData = {};
     if (name) updateData.name = name;
-    if (tableNumber) updateData.tableNumber = tableNumber;
+    if (tableNumber) {
+      // Check if another table already has this number
+      const existingTable = await Table.findOne({ 
+        tableNumber, 
+        _id: { $ne: req.params.id } // Exclude the current table
+      });
+      
+      if (existingTable) {
+        return res.status(400).json({ message: 'Table number already exists' });
+      }
+      
+      updateData.tableNumber = tableNumber;
+    }
 
     const updatedTable = await Table.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedTable) return res.status(404).json({ message: 'Table not found' });
