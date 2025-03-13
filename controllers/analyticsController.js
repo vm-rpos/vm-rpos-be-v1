@@ -10,7 +10,6 @@ const analyticsController = {
       const tables = await Table.find().sort({ tableNumber: 1 });
       
       // Fetch all completed orders (we want historical data for analytics)
-      // For a production app, you might want to add date filtering
       const orders = await Order.find({ status: { $in: ['pending', 'completed'] } });
       
       // Group orders by table
@@ -96,11 +95,9 @@ const analyticsController = {
       
       // Calculate table usage
       const tableUsage = tables.map(table => {
-        // Get all orders for this table
         const tableId = table._id.toString();
         const tableOrdersList = tableOrders[tableId] || [];
         
-        // Calculate metrics for this table
         let totalItems = 0;
         let revenue = 0;
         
@@ -120,11 +117,28 @@ const analyticsController = {
           revenue,
           orderCount: tableOrdersList.length
         };
-      }).filter(table => table.revenue > 0);  // Only include tables with revenue
+      }).filter(table => table.revenue > 0);
       
       // Calculate total revenue and other metrics
       const totalRevenue = allOrders.reduce((sum, order) => sum + (order.price * order.quantity), 0);
       const totalItems = allOrders.reduce((sum, order) => sum + order.quantity, 0);
+      
+      // Sort orders by total revenue and populate table details
+      const sortedOrders = await Order.find()
+        .sort({ total: -1 })
+        .populate('tableId', 'tableNumber name');
+      
+      const ordersWithTableInfo = sortedOrders.map(order => {
+        return {
+          _id: order._id,
+          tableNumber: order.tableId ? order.tableId.tableNumber : 'Unknown',
+          tableName: order.tableId ? order.tableId.name : 'Unknown',
+          items: order.items,
+          total: order.total,
+          status: order.status,
+          createdAt: order.createdAt
+        };
+      });
       
       res.json({
         popularItems,
@@ -133,7 +147,8 @@ const analyticsController = {
         tableUsage,
         totalRevenue,
         totalOrders: orders.length,
-        totalItems
+        totalItems,
+        sortedOrders: ordersWithTableInfo // Added sorted orders with table info
       });
     } catch (err) {
       console.error('Error generating analytics:', err);
