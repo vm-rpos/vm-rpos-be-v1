@@ -61,7 +61,9 @@ const analyticsController = {
               quantity: item.quantity || 1,
               categoryName: item.categoryName || 'Uncategorized',
               tableNumber: tableNumber,
-              tableName: tableName
+              tableName: tableName,
+              waiterId: order.waiterId || 'Unknown',
+              waiterName: order.waiterName || 'Unknown'
             });
           });
         }
@@ -71,6 +73,9 @@ const analyticsController = {
       const itemCounts = {};
       const itemRevenue = {};
       const categoryRevenue = {};
+      
+      // Track waiter performance
+      const waiterPerformance = {};
       
       allOrders.forEach(order => {
         // Count by item name
@@ -90,7 +95,41 @@ const analyticsController = {
           categoryRevenue[order.categoryName] = 0;
         }
         categoryRevenue[order.categoryName] += order.price * order.quantity;
+        
+        // Track waiter performance
+        const waiterId = order.waiterId || 'Unknown';
+        const waiterName = order.waiterName || 'Unknown Staff';
+        const waiterKey = `${waiterId}-${waiterName}`;
+        
+        if (!waiterPerformance[waiterKey]) {
+          waiterPerformance[waiterKey] = {
+            id: waiterId,
+            name: waiterName,
+            ordersCount: 0,
+            itemsServed: 0,
+            revenue: 0
+          };
+        }
+        
+        // Each item contributes to the waiter's performance
+        waiterPerformance[waiterKey].itemsServed += order.quantity;
+        waiterPerformance[waiterKey].revenue += order.price * order.quantity;
       });
+      
+      // Count unique orders per waiter
+      orders.forEach(order => {
+        const waiterId = order.waiterId || 'Unknown';
+        const waiterName = order.waiterName || 'Unknown Staff';
+        const waiterKey = `${waiterId}-${waiterName}`;
+        
+        if (waiterPerformance[waiterKey]) {
+          waiterPerformance[waiterKey].ordersCount += 1;
+        }
+      });
+      
+      // Convert waiter performance to array and sort by revenue
+      const waitersData = Object.values(waiterPerformance)
+        .sort((a, b) => b.revenue - a.revenue);
       
       // Convert to arrays and sort
       const popularItems = Object.entries(itemCounts)
@@ -156,6 +195,7 @@ const analyticsController = {
           _id: order._id,
           tableNumber: order.tableId ? order.tableId.tableNumber : 'Unknown',
           tableName: order.tableId ? order.tableId.name : 'Unknown',
+          waiterName: order.waiterName || 'Unknown Staff',
           items: order.items,
           total: order.total,
           status: order.status,
@@ -172,7 +212,8 @@ const analyticsController = {
         totalOrders: orders.length,
         totalItems,
         sortedOrders: ordersWithTableInfo, 
-        timeRange: timeRange // Include the time range in the response
+        waitersData, // Added waiter performance data
+        timeRange: timeRange
       });
     } catch (err) {
       console.error('Error generating analytics:', err);
