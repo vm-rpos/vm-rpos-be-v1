@@ -6,11 +6,34 @@ const analyticsController = {
   // Get analytics data
   getAnalyticsData: async (req, res) => {
     try {
+      // Get the time range from query parameters
+      const timeRange = req.query.timeRange || 'all';
+      
+      // Calculate date ranges based on timeRange
+      let dateFilter = {};
+      const now = new Date();
+      
+      if (timeRange === 'today') {
+        const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+        dateFilter = { createdAt: { $gte: startOfDay } };
+      } else if (timeRange === 'week') {
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+        startOfWeek.setHours(0, 0, 0, 0);
+        dateFilter = { createdAt: { $gte: startOfWeek } };
+      } else if (timeRange === 'month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        dateFilter = { createdAt: { $gte: startOfMonth } };
+      }
+      
       // Fetch all tables
       const tables = await Table.find().sort({ tableNumber: 1 });
       
-      // Fetch all completed orders (we want historical data for analytics)
-      const orders = await Order.find({ status: { $in: ['pending', 'completed'] } });
+      // Fetch orders based on time range and status
+      const orders = await Order.find({ 
+        status: { $in: ['pending', 'completed'] },
+        ...dateFilter
+      });
       
       // Group orders by table
       const tableOrders = {};
@@ -123,8 +146,8 @@ const analyticsController = {
       const totalRevenue = allOrders.reduce((sum, order) => sum + (order.price * order.quantity), 0);
       const totalItems = allOrders.reduce((sum, order) => sum + order.quantity, 0);
       
-      // Sort orders by total revenue and populate table details
-      const sortedOrders = await Order.find()
+      // Sort orders by total revenue and populate table details - use same time filter
+      const sortedOrders = await Order.find(dateFilter)
         .sort({ total: -1 })
         .populate('tableId', 'tableNumber name');
       
@@ -148,7 +171,8 @@ const analyticsController = {
         totalRevenue,
         totalOrders: orders.length,
         totalItems,
-        sortedOrders: ordersWithTableInfo // Added sorted orders with table info
+        sortedOrders: ordersWithTableInfo, 
+        timeRange: timeRange // Include the time range in the response
       });
     } catch (err) {
       console.error('Error generating analytics:', err);

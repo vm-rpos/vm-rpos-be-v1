@@ -33,6 +33,11 @@ const OrderSchema = new mongoose.Schema({
     ref: 'Table',
     required: true
   },
+  waiterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Waiter',
+    required: false
+  },
   items: [OrderItemSchema],
   total: {
     type: Number,

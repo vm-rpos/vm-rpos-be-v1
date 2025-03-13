@@ -55,32 +55,6 @@ exports.createTable = async (req, res) => {
   }
 };
 
-// Get a specific table with its current order
-exports.getTableById = async (req, res) => {
-  try {
-    const table = await Table.findById(req.params.id);
-    if (!table) return res.status(404).json({ message: 'Table not found' });
-
-    const currentOrder = await Order.findOne({
-      tableId: table._id,
-      status: 'pending'
-    }).sort({ createdAt: -1 });
-
-    res.json({
-      _id: table._id,
-      name: table.name,
-      tableNumber: table.tableNumber,
-      hasOrders: !!currentOrder,
-      orders: currentOrder ? currentOrder.items : [],
-      createdAt: table.createdAt,
-      updatedAt: table.updatedAt
-    });
-  } catch (err) {
-    console.error('Error getting table:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
 // Update a table
 exports.updateTable = async (req, res) => {
   try {
@@ -147,7 +121,7 @@ exports.deleteTable = async (req, res) => {
 // Place an order for a table
 exports.placeOrder = async (req, res) => {
   try {
-    const { orders } = req.body;
+    const { orders, waiterId } = req.body;
     console.log('Order request body:', req.body);
 
     if (!orders || !Array.isArray(orders) || orders.length === 0) {
@@ -156,6 +130,14 @@ exports.placeOrder = async (req, res) => {
 
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ message: 'Table not found' });
+
+    // Validate waiter ID if provided
+    if (waiterId) {
+      const waiter = await require('../models/Waiter').findById(waiterId);
+      if (!waiter) {
+        return res.status(404).json({ message: 'Waiter not found' });
+      }
+    }
 
     const validatedItems = orders.map(item => ({
       name: item.name,
@@ -172,14 +154,37 @@ exports.placeOrder = async (req, res) => {
     if (existingOrder) {
       existingOrder.items = validatedItems;
       existingOrder.total = total;
+      
+      // Update waiter assignment if provided
+      if (waiterId) {
+        existingOrder.waiterId = waiterId;
+      }
+      
       await existingOrder.save();
     } else {
-      existingOrder = new Order({ tableId: table._id, items: validatedItems, total, status: 'pending' });
+      // Create new order with waiter if provided
+      const orderData = { 
+        tableId: table._id, 
+        items: validatedItems, 
+        total, 
+        status: 'pending' 
+      };
+      
+      if (waiterId) {
+        orderData.waiterId = waiterId;
+      }
+      
+      existingOrder = new Order(orderData);
       await existingOrder.save();
     }
 
     table.hasOrders = true;
     await table.save();
+
+    // Populate waiter information if available
+    if (existingOrder.waiterId) {
+      await existingOrder.populate('waiterId');
+    }
 
     res.json({
       _id: table._id,
@@ -187,11 +192,52 @@ exports.placeOrder = async (req, res) => {
       tableNumber: table.tableNumber,
       hasOrders: true,
       orders: existingOrder.items,
+      waiter: existingOrder.waiterId ? {
+        _id: existingOrder.waiterId._id,
+        name: existingOrder.waiterId.name,
+        phoneNumber: existingOrder.waiterId.phoneNumber
+      } : null,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt
     });
   } catch (err) {
     console.error('Error placing order:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Modified getTableById to include waiter info
+exports.getTableById = async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ message: 'Table not found' });
+
+    const currentOrder = await Order.findOne({
+      tableId: table._id,
+      status: 'pending'
+    }).sort({ createdAt: -1 }).populate('waiterId');
+
+    let waiterInfo = null;
+    if (currentOrder && currentOrder.waiterId) {
+      waiterInfo = {
+        _id: currentOrder.waiterId._id,
+        name: currentOrder.waiterId.name,
+        phoneNumber: currentOrder.waiterId.phoneNumber
+      };
+    }
+
+    res.json({
+      _id: table._id,
+      name: table.name,
+      tableNumber: table.tableNumber,
+      hasOrders: !!currentOrder,
+      orders: currentOrder ? currentOrder.items : [],
+      waiter: waiterInfo,
+      createdAt: table.createdAt,
+      updatedAt: table.updatedAt
+    });
+  } catch (err) {
+    console.error('Error getting table:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

@@ -29,3 +29,37 @@ exports.getAllOrders= async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + err.message });
   }
 }
+
+exports.getOrders=async (req, res) => {
+  try {
+    // Get the time range from query parameters
+    const timeRange = req.query.timeRange || 'all';
+    
+    // Calculate date ranges based on timeRange
+    let dateFilter = {};
+    const now = new Date();
+    
+    if (timeRange === 'today') {
+      const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+      dateFilter = { createdAt: { $gte: startOfDay } };
+    } else if (timeRange === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+      startOfWeek.setHours(0, 0, 0, 0);
+      dateFilter = { createdAt: { $gte: startOfWeek } };
+    } else if (timeRange === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateFilter = { createdAt: { $gte: startOfMonth } };
+    }
+    
+    // Fetch orders based on time range
+    const orders = await Order.find(dateFilter)
+      .populate('tableId', 'tableNumber name')
+      .sort({ createdAt: -1 });
+    
+    res.json(orders);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ message: 'Server error: ' + err.message });
+  }
+}
