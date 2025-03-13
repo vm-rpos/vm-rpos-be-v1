@@ -14,8 +14,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "escpos": "^3.0.0-alpha.6",
+    "escpos-adapter": "^3.0.0-alpha.4",
+    "escpos-network": "^3.0.0-alpha.5",
+    "escpos-serialport": "^3.0.0-alpha.4",
+    "escpos-usb": "^3.0.0-alpha.4",
     "express": "^4.21.2",
-    "mongoose": "^8.12.1"
+    "mongoose": "^8.12.1",
+    "serialport": "^13.0.0",
+    "thermalprinter": "^0.3.10",
+    "usb": "^2.15.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
