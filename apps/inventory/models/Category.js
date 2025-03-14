@@ -1,4 +1,3 @@
-// models/Category.js
 const mongoose = require('mongoose');
 
 const CategorySchema = new mongoose.Schema({
@@ -10,4 +9,7 @@ const CategorySchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Category', CategorySchema);
+// Prevent OverwriteModelError
+const Category = mongoose.models.Category || mongoose.model('Category', CategorySchema);
+
+module.exports = Category;

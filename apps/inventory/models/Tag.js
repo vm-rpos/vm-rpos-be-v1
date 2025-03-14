@@ -1,4 +1,3 @@
-// models/Tag.js
 const mongoose = require('mongoose');
 
 const TagSchema = new mongoose.Schema({
@@ -10,4 +9,7 @@ const TagSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Tag', TagSchema);
+// Prevent OverwriteModelError
+const Tag = mongoose.models.Tag || mongoose.model('Tag', TagSchema);
+
+module.exports = Tag;

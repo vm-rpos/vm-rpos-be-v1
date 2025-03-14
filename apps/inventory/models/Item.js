@@ -31,4 +31,7 @@ const ItemSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Item', ItemSchema);
+// Prevent OverwriteModelError
+const Item = mongoose.models.Item || mongoose.model('Item', ItemSchema);
+
+module.exports = Item;
