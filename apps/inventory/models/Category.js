@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const CategorySchema = new mongoose.Schema({
+const IvmCategorySchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -10,6 +10,6 @@ const CategorySchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Prevent OverwriteModelError
-const Category = mongoose.models.Category || mongoose.model('Category', CategorySchema);
+const IvmCategory = mongoose.models.IvmCategory || mongoose.model('IvmCategory', IvmCategorySchema, 'ivmcategories');
 
-module.exports = Category;
+module.exports = IvmCategory;

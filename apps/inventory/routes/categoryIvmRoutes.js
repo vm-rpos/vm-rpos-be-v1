@@ -1,17 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const categoryController = require('../controllers/categoryController');
+const ivmCategoryController = require('../controllers/categoryController'); // Update controller file name
 
-// Category routes
-router.get('/', categoryController.getAllCategories);
-router.post('/', categoryController.createCategory);
-router.get('/:id', categoryController.getCategoryById);
-router.put('/:id', categoryController.updateCategory);
-router.delete('/:id', categoryController.deleteCategory);
+// IvmCategory routes
+router.get('/', ivmCategoryController.getAllIvmCategories);
+router.post('/', ivmCategoryController.createIvmCategory);
+router.get('/:id', ivmCategoryController.getIvmCategoryById);
+router.put('/:id', ivmCategoryController.updateIvmCategory);
+router.delete('/:id', ivmCategoryController.deleteIvmCategory);
 
-// Item routes within a category
-router.post('/:id/items', categoryController.addItemToCategory);
-router.put('/:categoryId/items/:itemId', categoryController.updateItemInCategory);
-router.delete('/:categoryId/items/:itemId', categoryController.deleteItemFromCategory);
+// Item routes within an ivmCategory
+router.post('/:id/items', ivmCategoryController.addItemToIvmCategory);
+router.put('/:categoryId/items/:itemId', ivmCategoryController.updateItemInIvmCategory);
+router.delete('/:categoryId/items/:itemId', ivmCategoryController.deleteItemFromIvmCategory);
 
 module.exports = router;

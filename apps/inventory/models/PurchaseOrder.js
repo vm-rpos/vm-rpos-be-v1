@@ -3,11 +3,12 @@ const mongoose = require('mongoose');
 const purchaseOrderSchema = new mongoose.Schema({
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor', // References the Vendor model
+    ref: 'Vendor',
     required: true
   },
-  item: {
-    type: String,
+  itemId: {  // Changed from 'item' to 'itemId'
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Item',
     required: true
   },
   quantity: {
@@ -16,7 +17,7 @@ const purchaseOrderSchema = new mongoose.Schema({
     min: 1
   },
   price: {
-    type: Number, // Empty initially
+    type: Number,
     default: null
   },
   status: {

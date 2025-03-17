@@ -1,15 +1,14 @@
 const mongoose = require('mongoose');
 
-const TagSchema = new mongoose.Schema({
+const IvmTagSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true,
-    unique: true
+    unique: true,
+    trim: true
   }
 }, { timestamps: true });
 
-// Prevent OverwriteModelError
-const Tag = mongoose.models.Tag || mongoose.model('Tag', TagSchema);
+const IvmTag = mongoose.models.IvmTag || mongoose.model('IvmTag', IvmTagSchema);
 
-module.exports = Tag;
+module.exports = IvmTag;

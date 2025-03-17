@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const ItemSchema = new mongoose.Schema({
+const IvmItemSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -22,7 +22,7 @@ const ItemSchema = new mongoose.Schema({
   }],
   categoryId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Category',
+    ref: 'IvmCategory', // Reference ivmCategories instead of Category
     required: true
   },
   categoryName: {
@@ -32,6 +32,6 @@ const ItemSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Prevent OverwriteModelError
-const Item = mongoose.models.Item || mongoose.model('Item', ItemSchema);
+const IvmItem = mongoose.models.IvmItem || mongoose.model('IvmItem', IvmItemSchema);
 
-module.exports = Item;
+module.exports = IvmItem;

@@ -3,7 +3,7 @@ const Item = require('../models/Item');
 const Tag = require('../models/Tag');
 
 // Get all categories with their items
-exports.getAllCategories = async (req, res) => {
+exports.getAllIvmCategories = async (req, res) => {
   try {
     const categories = await Category.find().sort({ name: 1 });
     const categoriesWithItems = await Promise.all(
@@ -20,7 +20,7 @@ exports.getAllCategories = async (req, res) => {
 };
 
 // Create a new category
-exports.createCategory = async (req, res) => {
+exports.createIvmCategory = async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Category name is required' });
@@ -39,7 +39,7 @@ exports.createCategory = async (req, res) => {
 };
 
 // Get a specific category with its items
-exports.getCategoryById = async (req, res) => {
+exports.getIvmCategoryById = async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
     if (!category) return res.status(404).json({ message: 'Category not found' });
@@ -53,7 +53,7 @@ exports.getCategoryById = async (req, res) => {
 };
 
 // Update a category name
-exports.updateCategory = async (req, res) => {
+exports.updateIvmCategory = async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Category name is required' });
@@ -77,7 +77,7 @@ exports.updateCategory = async (req, res) => {
 };
 
 // Delete a category and all its items
-exports.deleteCategory = async (req, res) => {
+exports.deleteIvmCategory = async (req, res) => {
   try {
     const deletedCategory = await Category.findByIdAndDelete(req.params.id);
     if (!deletedCategory) return res.status(404).json({ message: 'Category not found' });
@@ -92,7 +92,7 @@ exports.deleteCategory = async (req, res) => {
 };
 
 // Add item to category with tag handling
-exports.addItemToCategory = async (req, res) => {
+exports.addItemToIvmCategory = async (req, res) => {
   try {
     const { name, price, description, tags } = req.body;
     if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
@@ -139,7 +139,7 @@ exports.addItemToCategory = async (req, res) => {
 };
 
 // Update item in category with tag handling
-exports.updateItemInCategory = async (req, res) => {
+exports.updateItemInIvmCategory = async (req, res) => {
   try {
     const { name, price, description, tags } = req.body;
     if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
@@ -189,7 +189,7 @@ exports.updateItemInCategory = async (req, res) => {
 };
 
 // Delete an item from a category
-exports.deleteItemFromCategory = async (req, res) => {
+exports.deleteItemFromIvmCategory = async (req, res) => {
   try {
     const category = await Category.findById(req.params.categoryId);
     if (!category) return res.status(404).json({ message: 'Category not found' });
