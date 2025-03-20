@@ -17,6 +17,7 @@ const categoryIvmRoutes = require("./apps/inventory/routes/categoryIvmRoutes");
 const itemIvmRoutes = require("./apps/inventory/routes/itemIvmRoutes");
 const orderIvmRoutes = require("./apps/inventory/routes/orderIvmRoutes");
 const ivmRoutes = require("./apps/inventory/routes/ivmRoutes");
+const authRoutes = require("./apps/pos/routes/authRoutes");
 
 const app = express();
 
@@ -44,6 +45,9 @@ app.use('/api-ivm/vendors', vendorIvmRoutes);
 app.use('/api-ivm/ivmorders', ivmRoutes);
 app.use('/api-ivm/items', itemIvmRoutes);
 app.use('/api-ivm/orders', orderIvmRoutes);
+
+//Auth Routes
+app.use("/api/auth", authRoutes);
 
 
 

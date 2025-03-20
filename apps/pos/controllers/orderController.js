@@ -29,7 +29,7 @@ exports.getAllOrders = async (req, res) => {
       status: "completed",
       ...dateFilter,
     })
-      .sort({ createdAt: -1 }) // Most recent first
+      .sort({ total: -1 }) // Most recent first
       .limit(10) // Only fetch the top 10 orders
       .populate('tableId', 'tableNumber name'); // Get table info
 
