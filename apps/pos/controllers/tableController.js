@@ -37,21 +37,33 @@ exports.createTable = async (req, res) => {
     const { name, tableNumber } = req.body;
 
     if (!name || !tableNumber) {
-      return res.status(400).json({ message: 'Table name and number are required' });
+      return res.status(400).json({ message: "Table name and number are required" });
     }
 
-    const existingTable = await Table.findOne({ tableNumber });
+    // ✅ Ensure the authenticated user has a restaurantId
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "User does not have a valid restaurantId" });
+    }
+
+    // ✅ Check if the table number already exists for the restaurant
+    const existingTable = await Table.findOne({ tableNumber, restaurantId: req.user.restaurantId });
     if (existingTable) {
-      return res.status(400).json({ message: 'Table number already exists' });
+      return res.status(400).json({ message: "Table number already exists for this restaurant" });
     }
 
-    const newTable = new Table({ name, tableNumber, hasOrders: false });
-    const savedTable = await newTable.save();
+    // ✅ Assign restaurantId from logged-in user
+    const newTable = new Table({
+      name,
+      tableNumber: parseInt(tableNumber),
+      hasOrders: false,
+      restaurantId: req.user.restaurantId
+    });
 
+    const savedTable = await newTable.save();
     res.status(201).json(savedTable);
   } catch (err) {
-    console.error('Error creating table:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error creating table:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -121,69 +133,83 @@ exports.deleteTable = async (req, res) => {
 // Place an order for a table
 exports.placeOrder = async (req, res) => {
   try {
-    const { orders, waiterId } = req.body;
-    console.log('Order request body:', req.body);
+    const { orders, waiterId, restaurantId } = req.body;
+    console.log("Order request body:", req.body);
 
+    // Ensure orders exist and are valid
     if (!orders || !Array.isArray(orders) || orders.length === 0) {
-      return res.status(400).json({ message: 'Orders must be a non-empty array' });
+      return res.status(400).json({ message: "Orders must be a non-empty array" });
     }
 
+    // Find the table
     const table = await Table.findById(req.params.id);
-    if (!table) return res.status(404).json({ message: 'Table not found' });
+    if (!table) return res.status(404).json({ message: "Table not found" });
+
+    // Ensure restaurantId is present (either from request or from the table)
+    const finalRestaurantId = restaurantId || table.restaurantId;
+    if (!finalRestaurantId) {
+      return res.status(400).json({ message: "restaurantId is required" });
+    }
 
     // Validate waiter ID if provided
     if (waiterId) {
-      const waiter = await require('../models/Waiter').findById(waiterId);
+      const waiter = await require("../models/Waiter").findById(waiterId);
       if (!waiter) {
-        return res.status(404).json({ message: 'Waiter not found' });
+        return res.status(404).json({ message: "Waiter not found" });
       }
     }
 
-    const validatedItems = orders.map(item => ({
+    // Validate order items
+    const validatedItems = orders.map((item) => ({
       name: item.name,
       price: Number(item.price),
       quantity: Number(item.quantity) || 1,
-      categoryName: item.categoryName || 'Uncategorized',
-      itemId: item.itemId || null
+      categoryName: item.categoryName || "Uncategorized",
+      itemId: item.itemId || null,
     }));
 
-    const total = validatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Calculate total order amount
+    const total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-    let existingOrder = await Order.findOne({ tableId: table._id, status: 'pending' });
+    // Find an existing order for the table (pending status)
+    let existingOrder = await Order.findOne({ tableId: table._id, status: "pending" });
 
     if (existingOrder) {
+      // Update existing order
       existingOrder.items = validatedItems;
       existingOrder.total = total;
-      
-      // Update waiter assignment if provided
+      existingOrder.restaurantId = finalRestaurantId;
+
       if (waiterId) {
         existingOrder.waiterId = waiterId;
       }
-      
+
       await existingOrder.save();
     } else {
-      // Create new order with waiter if provided
-      const orderData = { 
-        tableId: table._id, 
-        items: validatedItems, 
-        total, 
-        status: 'pending' 
+      // Create new order
+      const orderData = {
+        restaurantId: finalRestaurantId,
+        tableId: table._id,
+        items: validatedItems,
+        total,
+        status: "pending",
       };
-      
+
       if (waiterId) {
         orderData.waiterId = waiterId;
       }
-      
+
       existingOrder = new Order(orderData);
       await existingOrder.save();
     }
 
+    // Update table status
     table.hasOrders = true;
     await table.save();
 
-    // Populate waiter information if available
+    // Populate waiter info if available
     if (existingOrder.waiterId) {
-      await existingOrder.populate('waiterId');
+      await existingOrder.populate("waiterId");
     }
 
     res.json({
@@ -191,18 +217,21 @@ exports.placeOrder = async (req, res) => {
       name: table.name,
       tableNumber: table.tableNumber,
       hasOrders: true,
+      restaurantId: finalRestaurantId,
       orders: existingOrder.items,
-      waiter: existingOrder.waiterId ? {
-        _id: existingOrder.waiterId._id,
-        name: existingOrder.waiterId.name,
-        phoneNumber: existingOrder.waiterId.phoneNumber
-      } : null,
+      waiter: existingOrder.waiterId
+        ? {
+            _id: existingOrder.waiterId._id,
+            name: existingOrder.waiterId.name,
+            phoneNumber: existingOrder.waiterId.phoneNumber,
+          }
+        : null,
       createdAt: table.createdAt,
-      updatedAt: table.updatedAt
+      updatedAt: table.updatedAt,
     });
   } catch (err) {
-    console.error('Error placing order:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error placing order:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

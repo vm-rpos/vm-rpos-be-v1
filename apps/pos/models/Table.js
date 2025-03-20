@@ -1,4 +1,3 @@
-// models/Table.js
 const mongoose = require('mongoose');
 
 const TableSchema = new mongoose.Schema({
@@ -15,6 +14,11 @@ const TableSchema = new mongoose.Schema({
   hasOrders: {
     type: Boolean,
     default: false
+  },
+  restaurantId: {  // ✅ Add restaurantId field
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', 
+    required: true
   }
 }, { timestamps: true });
 

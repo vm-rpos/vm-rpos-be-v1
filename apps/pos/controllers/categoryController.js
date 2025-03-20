@@ -23,18 +23,35 @@ exports.getAllCategories = async (req, res) => {
 exports.createCategory = async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) return res.status(400).json({ message: 'Category name is required' });
 
-    const existingCategory = await Category.findOne({ name });
-    if (existingCategory) return res.status(400).json({ message: 'Category already exists' });
+    if (!name) {
+      return res.status(400).json({ message: "Category name is required" });
+    }
 
-    const newCategory = new Category({ name });
+    // Ensure the request is authenticated and contains restaurantId
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+    }
+
+    const existingCategory = await Category.findOne({
+      name,
+      restaurantId: req.user.restaurantId, // Ensure uniqueness within a restaurant
+    });
+
+    if (existingCategory) {
+      return res.status(400).json({ message: "Category already exists" });
+    }
+
+    const newCategory = new Category({
+      name,
+      restaurantId: req.user.restaurantId, // Assign restaurantId
+    });
+
     const savedCategory = await newCategory.save();
-
-    res.status(201).json({ _id: savedCategory._id, name: savedCategory.name, items: [] });
+    res.status(201).json(savedCategory);
   } catch (err) {
-    console.error('Error creating category:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error creating category:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -95,46 +112,68 @@ exports.deleteCategory = async (req, res) => {
 exports.addItemToCategory = async (req, res) => {
   try {
     const { name, price, description, tags } = req.body;
-    if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
+
+    if (!name || price === undefined) {
+      return res.status(400).json({ message: "Item name and price are required" });
+    }
+
+    // Ensure the request is authenticated and contains restaurantId
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+    }
 
     const category = await Category.findById(req.params.id);
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
 
-    const existingItem = await Item.findOne({ categoryId: category._id, name });
-    if (existingItem) return res.status(400).json({ message: 'Item with this name already exists in the category' });
+    // Ensure the category belongs to the same restaurant
+    if (category.restaurantId.toString() !== req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: Category does not belong to your restaurant" });
+    }
+
+    const existingItem = await Item.findOne({
+      categoryId: category._id,
+      name,
+      restaurantId: req.user.restaurantId, // Ensure uniqueness within a restaurant
+    });
+
+    if (existingItem) {
+      return res.status(400).json({ message: "Item with this name already exists in the category" });
+    }
 
     // Handle tags
     let tagIds = [];
     if (tags && tags.length > 0) {
-      // Process each tag name
       for (const tagName of tags) {
-        // Look for existing tag or create a new one
-        let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, 'i') } });
-        
+        let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, "i") } });
+
         if (!tag) {
           tag = new Tag({ name: tagName });
           await tag.save();
         }
-        
+
         tagIds.push(tag._id);
       }
     }
 
-    const newItem = new Item({ 
-      name, 
-      price, 
-      description: description || "", 
+    const newItem = new Item({
+      name,
+      price,
+      description: description || "",
       tags: tagIds,
-      categoryId: category._id, 
-      categoryName: category.name 
+      categoryId: category._id,
+      categoryName: category.name,
+      restaurantId: req.user.restaurantId, // Assign restaurantId
     });
+
     await newItem.save();
 
-    const items = await Item.find({ categoryId: category._id }).populate('tags');
+    const items = await Item.find({ categoryId: category._id }).populate("tags");
     res.status(201).json({ _id: category._id, name: category.name, items });
   } catch (err) {
-    console.error('Error adding item to category:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error adding item to category:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

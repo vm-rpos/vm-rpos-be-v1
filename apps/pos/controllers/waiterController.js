@@ -17,22 +17,32 @@ exports.createWaiter = async (req, res) => {
     const { name, age, phoneNumber } = req.body;
 
     if (!name || !age || !phoneNumber) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // Ensure the request is authenticated and contains the restaurantId
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
     }
 
     // Check if phone number already exists
     const existingWaiter = await Waiter.findOne({ phoneNumber });
     if (existingWaiter) {
-      return res.status(400).json({ message: 'Phone number already exists' });
+      return res.status(400).json({ message: "Phone number already exists" });
     }
 
-    const newWaiter = new Waiter({ name, age, phoneNumber });
-    await newWaiter.save();
+    const newWaiter = new Waiter({
+      name,
+      age,
+      phoneNumber,
+      restaurantId: req.user.restaurantId, // Assign the logged-in user's restaurantId
+    });
 
+    await newWaiter.save();
     res.status(201).json(newWaiter);
   } catch (err) {
-    console.error('Error creating waiter:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error creating waiter:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

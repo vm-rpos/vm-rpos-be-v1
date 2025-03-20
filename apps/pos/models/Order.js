@@ -28,6 +28,11 @@ const OrderItemSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
+  restaurantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Restaurant',
+    required: true // Ensure every order belongs to a restaurant
+  },
   tableId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Table',

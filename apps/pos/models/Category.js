@@ -1,15 +1,21 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const CategorySchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-    unique: true
-  }
-}, { timestamps: true });
+const CategorySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      unique: true,
+    },
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant", // Assuming you have a Restaurant model
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
 
-// Prevent OverwriteModelError
-const Category = mongoose.models.Category || mongoose.model('Category', CategorySchema);
-
+const Category = mongoose.models.Category || mongoose.model("Category", CategorySchema);
 module.exports = Category;

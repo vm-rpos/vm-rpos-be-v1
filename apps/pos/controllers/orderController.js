@@ -51,3 +51,30 @@ exports.getAllOrders = async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + err.message });
   }
 };
+
+exports.createOrder = async (req, res) => {
+  try {
+    const { tableId, waiterId, items, restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ message: "Restaurant ID is required" });
+    }
+
+    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    const newOrder = new Order({
+      restaurantId,
+      tableId,
+      waiterId,
+      items,
+      total
+    });
+
+    await newOrder.save();
+
+    res.status(201).json(newOrder);
+  } catch (err) {
+    console.error("Error creating order:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
