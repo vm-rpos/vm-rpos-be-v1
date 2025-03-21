@@ -36,12 +36,18 @@ const generateRefreshToken = (user) => {
 exports.signup = async (req, res) => {
   try {
     console.log("Signup attempt:", req.body.email);
-    const { firstname, lastname, phonenumber, email, password, restaurantId, pin } = req.body;
+    const { firstname, lastname, phonenumber, email, password, restaurantId, pin, role } = req.body;
     
     // Validate PIN (must be 4 digits)
     if (!/^\d{4}$/.test(pin)) {
       console.log("Signup failed: Invalid PIN format");
       return res.status(400).json({ error: "PIN must be a 4-digit number" });
+    }
+    
+    // Validate role
+    if (!role || !["admin", "pos"].includes(role)) {
+      console.log("Signup failed: Invalid role");
+      return res.status(400).json({ error: "Role must be either 'admin' or 'pos'" });
     }
     
     const userExists = await User.findOne({ email });
@@ -61,6 +67,7 @@ exports.signup = async (req, res) => {
       password: hashedPassword, 
       restaurantId, 
       pin: hashedPin,
+      role, // Add the role
       refreshTokens: [] // Initialize empty refresh tokens array
     });
     
@@ -115,7 +122,8 @@ exports.login = async (req, res) => {
         email: user.email,
         restaurantId: user.restaurantId,
         firstname: user.firstname,
-        lastname: user.lastname
+        lastname: user.lastname,
+        role: user.role // Include the role in the response
       }
     });
     console.log("Login successful for:", email);
@@ -154,7 +162,8 @@ exports.verifyPin = async (req, res) => {
         email: user.email,
         restaurantId: user.restaurantId,
         firstname: user.firstname,
-        lastname: user.lastname
+        lastname: user.lastname,
+        role: user.role // Include the role
       }
     });
     console.log("PIN verification successful for user:", userId);
@@ -205,7 +214,8 @@ exports.refreshToken = async (req, res) => {
         email: user.email,
         restaurantId: user.restaurantId,
         firstname: user.firstname,
-        lastname: user.lastname
+        lastname: user.lastname,
+        role: user.role // Include the role
       }
     });
     console.log("Token refresh successful for user:", user._id);
