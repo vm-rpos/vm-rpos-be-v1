@@ -18,14 +18,20 @@ const generateToken = (user) => {
 // **User Signup**
 exports.signup = async (req, res) => {
   try {
-    const { firstname, lastname, phonenumber, email, password, restaurantId } = req.body;
+    const { firstname, lastname, phonenumber, email, password, restaurantId, pin } = req.body;
+
+    // Validate PIN (must be 4 digits)
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ error: "PIN must be a 4-digit number" });
+    }
 
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ error: "Email already in use" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPin = await bcrypt.hash(pin, 10); // Hash the PIN
 
-    const newUser = new User({ firstname, lastname, phonenumber, email, password: hashedPassword, restaurantId });
+    const newUser = new User({ firstname, lastname, phonenumber, email, password: hashedPassword, restaurantId, pin: hashedPin });
     await newUser.save();
 
     res.json({ message: "User registered successfully" });
