@@ -1,21 +1,67 @@
 const Category = require('../models/Category');
 const Item = require('../models/Item');
 const Tag = require('../models/Tag');
+const mongoose = require('mongoose');
 
 // Get all categories with their items
+// exports.getAllCategories = async (req, res) => {
+//   try {
+//     const categories = await Category.find().sort({ name: 1 });
+//     const categoriesWithItems = await Promise.all(
+//       categories.map(async (category) => {
+//         const items = await Item.find({ categoryId: category._id }).populate('tags');
+//         return { _id: category._id, name: category.name, items };
+//       })
+//     );
+//     res.json(categoriesWithItems);
+//   } catch (err) {
+//     console.error('Error getting categories:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+//Get based on RestaurantId
 exports.getAllCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    const { restaurantId } = req.query;
+    
+    if (!restaurantId) {
+      return res.status(400).json({ message: "Restaurant ID is required" });
+    }
+
+    // Check if restaurantId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ message: "Invalid restaurant ID format" });
+    }
+    
+    // Convert string ID to ObjectId
+    const objectId = new mongoose.Types.ObjectId(restaurantId);
+    
+    // Find categories for this restaurant
+    const categories = await Category.find({ 
+      restaurantId: objectId 
+    }).sort({ name: 1 });
+    
+    // Get items for each category
     const categoriesWithItems = await Promise.all(
       categories.map(async (category) => {
-        const items = await Item.find({ categoryId: category._id }).populate('tags');
-        return { _id: category._id, name: category.name, items };
+        const items = await Item.find({ 
+          categoryId: category._id,
+          restaurantId: objectId // Also filter items by restaurantId for extra security
+        }).populate('tags');
+        
+        return { 
+          _id: category._id, 
+          name: category.name, 
+          items 
+        };
       })
     );
+    
     res.json(categoriesWithItems);
   } catch (err) {
     console.error('Error getting categories:', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 

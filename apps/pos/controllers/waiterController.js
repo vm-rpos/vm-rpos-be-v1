@@ -1,13 +1,37 @@
 const Waiter = require('../models/Waiter');
+const mongoose = require('mongoose');
 
 // Get all waiters
+// exports.getAllWaiters = async (req, res) => {
+//   try {
+//     const waiters = await Waiter.find().sort({ createdAt: -1 });
+//     res.json(waiters);
+//   } catch (err) {
+//     console.error('Error fetching waiters:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+//Get all waiters based on User's RestaurantId
 exports.getAllWaiters = async (req, res) => {
   try {
-    const waiters = await Waiter.find().sort({ createdAt: -1 });
+    const { restaurantId } = req.query;
+    if (!restaurantId) {
+      return res.status(400).json({ message: "Restaurant ID is required" });
+    }
+
+    // Check if restaurantId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ message: "Invalid restaurant ID format" });
+    }
+
+    const objectId = new mongoose.Types.ObjectId(restaurantId);
+    const waiters = await Waiter.find({ restaurantId: objectId }).sort({ createdAt: -1 });
+
     res.json(waiters);
   } catch (err) {
-    console.error('Error fetching waiters:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error fetching waiters:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 

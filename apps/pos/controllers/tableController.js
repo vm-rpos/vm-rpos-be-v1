@@ -2,15 +2,52 @@ const Table = require('../models/Table');
 const Order = require('../models/Order');
 
 // Get all tables with their order information
+// exports.getAllTables = async (req, res) => {
+//   try {
+//     const tables = await Table.find().sort({ tableNumber: 1 });
+
+//     const tablesWithOrderInfo = await Promise.all(
+//       tables.map(async (table) => {
+//         const latestOrder = await Order.findOne({
+//           tableId: table._id,
+//           status: 'pending'
+//         }).sort({ createdAt: -1 });
+
+//         return {
+//           _id: table._id,
+//           name: table.name,
+//           tableNumber: table.tableNumber,
+//           hasOrders: !!latestOrder,
+//           createdAt: table.createdAt,
+//           updatedAt: table.updatedAt
+//         };
+//       })
+//     );
+
+//     res.json(tablesWithOrderInfo);
+//   } catch (err) {
+//     console.error('Error getting tables:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+//Fetching based on User's RestaurantId
 exports.getAllTables = async (req, res) => {
   try {
-    const tables = await Table.find().sort({ tableNumber: 1 });
+    const { restaurantId } = req.query;
+    if (!restaurantId) {
+      return res.status(400).json({ message: "Restaurant ID is required" });
+    }
 
+    // Fetch tables that belong to the restaurant
+    const tables = await Table.find({ restaurantId }).sort({ tableNumber: 1 });
+
+    // Get latest order for each table to check for pending orders
     const tablesWithOrderInfo = await Promise.all(
       tables.map(async (table) => {
         const latestOrder = await Order.findOne({
           tableId: table._id,
-          status: 'pending'
+          status: "pending",
         }).sort({ createdAt: -1 });
 
         return {
@@ -18,16 +55,17 @@ exports.getAllTables = async (req, res) => {
           name: table.name,
           tableNumber: table.tableNumber,
           hasOrders: !!latestOrder,
+          restaurantId: table.restaurantId, // Ensure restaurantId is included
           createdAt: table.createdAt,
-          updatedAt: table.updatedAt
+          updatedAt: table.updatedAt,
         };
       })
     );
 
     res.json(tablesWithOrderInfo);
   } catch (err) {
-    console.error('Error getting tables:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error getting tables:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

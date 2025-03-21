@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Table = require("../models/Table");
 const Order = require("../models/Order");
 
@@ -6,8 +7,20 @@ const analyticsController = {
   // Get analytics data
   getAnalyticsData: async (req, res) => {
     try {
-      // Get the time range from query parameters
-      const timeRange = req.query.timeRange || "all";
+      // Get restaurantId from query parameters
+      const { restaurantId, timeRange = "all" } = req.query;
+      
+      if (!restaurantId) {
+        return res.status(400).json({ message: "Restaurant ID is required" });
+      }
+      
+      // Check if restaurantId is a valid ObjectId
+      if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+        return res.status(400).json({ message: "Invalid restaurant ID format" });
+      }
+      
+      // Convert string ID to ObjectId
+      const restaurantObjectId = new mongoose.Types.ObjectId(restaurantId);
 
       // Calculate date ranges based on timeRange
       let dateFilter = {};
@@ -26,11 +39,14 @@ const analyticsController = {
         dateFilter = { createdAt: { $gte: startOfMonth } };
       }
 
-      // Fetch all tables
-      const tables = await Table.find().sort({ tableNumber: 1 });
+      // Fetch all tables for this restaurant
+      const tables = await Table.find({ 
+        restaurantId: restaurantObjectId 
+      }).sort({ tableNumber: 1 });
 
-      // Fetch orders based on time range and status
+      // Fetch orders based on time range, status and restaurantId
       const orders = await Order.find({
+        restaurantId: restaurantObjectId,
         status: { $in: ["pending", "completed"] },
         ...dateFilter,
       }).populate("waiterId");
@@ -117,9 +133,6 @@ const analyticsController = {
         waiterPerformance[waiterKey].itemsServed += order.quantity;
         waiterPerformance[waiterKey].revenue += order.price * order.quantity;
       });
-
-      // Count unique orders per waiter
-      // Start with a clean waiter performance object
 
       // Process each order to track waiter performance
       orders.forEach((order) => {
@@ -256,8 +269,8 @@ const analyticsController = {
       );
 
       // Sort orders by total revenue and populate table details - use same time filter
-
       const sortedOrders = await Order.find({
+        restaurantId: restaurantObjectId,
         ...dateFilter,
         status: "completed", // Only fetch completed orders
       })
@@ -289,6 +302,7 @@ const analyticsController = {
         sortedOrders: ordersWithTableInfo,
         waitersData, // Added waiter performance data
         timeRange: timeRange,
+        restaurantId: restaurantId, // Include the restaurant ID in the response
       });
     } catch (err) {
       console.error("Error generating analytics:", err);
