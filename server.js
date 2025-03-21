@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const tableRoutes = require('./apps/pos/routes/tableRoutes');
 const categoryRoutes = require("./apps/pos/routes/categoryRoutes");
@@ -23,6 +24,7 @@ const app = express();
 
 // Middleware
 app.use(express.json());
+app.use(cookieParser());
 app.use(cors());
 
 // Connect to MongoDB

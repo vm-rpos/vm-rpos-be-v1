@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   restaurantId: { type: String, required: true },
   pin: { type: String, required: true },
+  refreshTokens: [{ type: String }],
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", UserSchema);
