@@ -61,3 +61,16 @@ exports.deleteRestaurant = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+//Get restaurant name during login
+exports.getRestaurantName =  async(req,res)=>{
+  try {
+    const restaurant = await Restaurant.findById(req.params.id);
+    if (!restaurant) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+    res.json({ name: restaurant.name });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching restaurant data" });
+  }
+}
