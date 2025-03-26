@@ -91,8 +91,6 @@ exports.createIVMOrder = async (req, res) => {
   }
 };
 
-
-
 // Get all IVM Orders
 exports.getAllIVMOrders = async (req, res) => {
   try {
@@ -230,7 +228,6 @@ exports.updateIVMOrder = async (req, res) => {
   }
 };
 
-
 // Delete an IVM Order
 exports.deleteIVMOrder = async (req, res) => {
   try {
@@ -241,5 +238,41 @@ exports.deleteIVMOrder = async (req, res) => {
   } catch (err) {
     console.error('Error deleting IVM order:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.getOrderCounts = async (req, res) => {
+  try {
+    const purchaseCount = await IVMOrder.countDocuments({ orderType: 'purchaseOrder' });
+    const saleCount = await IVMOrder.countDocuments({ orderType: 'saleOrder' });
+    const stockoutCount = await IVMOrder.countDocuments({ orderType: 'stockoutOrder' });
+
+    res.json({ purchase: purchaseCount, sale: saleCount, stockout: stockoutCount });
+  } catch (error) {
+    console.error('Error fetching order counts:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.getOrderValues = async (req, res) => {
+  try {
+    const orders = await IvmOrder.find();
+
+    const orderValues = {
+      purchaseOrder: 0,
+      saleOrder: 0,
+      stockoutOrder: 0
+    };
+
+    orders.forEach(order => {
+      const totalOrderValue = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      if (order.orderType in orderValues) {
+        orderValues[order.orderType] += totalOrderValue;
+      }
+    });
+
+    res.json(orderValues);
+  } catch (error) {
+    res.status(500).json({ message: 'Error calculating order values', error });
   }
 };
