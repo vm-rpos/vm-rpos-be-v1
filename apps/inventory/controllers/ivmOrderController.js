@@ -23,8 +23,8 @@ exports.createIVMOrder = async (req, res) => {
 
     // Validate each item
     for (const item of items) {
-      if (!item.itemId || !item.name || !item.quantity) {
-        return res.status(400).json({ message: 'Each item must have itemId, name, and quantity' });
+      if (!item.itemId || !item.name || !item.quantity || !item.price) {
+        return res.status(400).json({ message: 'Each item must have itemId, name, quantity, and price' });
       }
     }
 
@@ -37,18 +37,40 @@ exports.createIVMOrder = async (req, res) => {
       expectedDeliveryDate
     });
 
-    // Save the order without a session
+    // Save the order
     const savedOrder = await newOrder.save();
 
-    // Update item quantities based on order type
-    for (const item of items) {
-      if (orderType === 'purchaseOrder') {
+    // Process items based on order type
+    if (orderType === 'purchaseOrder') {
+      for (const item of items) {
+        // Find the existing item
+        const existingItem = await Item.findById(item.itemId);
+
+        if (!existingItem) {
+          return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
+        }
+
+        // Calculate new average price and total purchase value
+        const newTotalQuantity = existingItem.quantity + item.quantity;
+        const newTotalPurchaseValue = (existingItem.totalPurchaseValue || 0) + (item.price * item.quantity);
+        const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
+        // const newAvgPrice = newTotalPurchaseValue / newTotalQuantity;
+
+        // Update item details
         await Item.findByIdAndUpdate(
           item.itemId,
-          { $inc: { quantity: item.quantity } },
+          {
+            $inc: { quantity: item.quantity },
+            price: item.price, // Update current price to latest price
+            avgPrice: newAvgPrice,
+            totalPurchaseValue: newTotalPurchaseValue
+          },
           { new: true }
         );
-      } else if (orderType === 'saleOrder' || orderType === 'stockoutOrder') {
+      }
+    } else if (orderType === 'saleOrder' || orderType === 'stockoutOrder') {
+      // Reduce item quantities for sale or stockout orders
+      for (const item of items) {
         await Item.findByIdAndUpdate(
           item.itemId,
           { $inc: { quantity: -item.quantity } },
@@ -68,6 +90,8 @@ exports.createIVMOrder = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+
+
 
 // Get all IVM Orders
 exports.getAllIVMOrders = async (req, res) => {
@@ -152,72 +176,60 @@ exports.getIVMOrderById = async (req, res) => {
 
 // Update an IVM Order
 exports.updateIVMOrder = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { orderType, vendorId, destination, items, expectedDeliveryDate, status } = req.body;
-    
+
     // Find the existing order to compare item quantities
-    const existingOrder = await IVMOrder.findById(req.params.id).session(session);
-    
+    const existingOrder = await IVMOrder.findById(req.params.id);
+    if (!existingOrder) {
+      return res.status(404).json({ message: 'IVM order not found' });
+    }
+
     const updateData = {};
     if (orderType) updateData.orderType = orderType;
     if (vendorId) updateData.vendorId = vendorId;
     if (destination) updateData.destination = destination;
     if (expectedDeliveryDate) updateData.expectedDeliveryDate = expectedDeliveryDate;
     if (status) updateData.status = status;
-    
+
     // Update order items and quantities
     if (items) {
       updateData.items = items;
-      
+
       // Only adjust quantities for purchase orders
       if (existingOrder.orderType === 'purchaseOrder') {
         // Revert previous quantities
         for (const existingItem of existingOrder.items) {
           await Item.findByIdAndUpdate(
-            existingItem.itemId, 
-            { $inc: { quantity: -existingItem.quantity } }, 
-            { session }
+            existingItem.itemId,
+            { $inc: { quantity: -existingItem.quantity } }
           );
         }
-        
+
         // Add new quantities
         for (const item of items) {
           await Item.findByIdAndUpdate(
-            item.itemId, 
-            { $inc: { quantity: item.quantity } }, 
-            { session, new: true }
+            item.itemId,
+            { $inc: { quantity: item.quantity } },
+            { new: true }
           );
         }
       }
     }
-    
+
     const updatedOrder = await IVMOrder.findByIdAndUpdate(
-      req.params.id, 
-      updateData, 
-      { new: true, runValidators: true, session }
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
     );
-    
-    if (!updatedOrder) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ message: 'IVM order not found' });
-    }
-    
-    await session.commitTransaction();
-    session.endSession();
-    
+
     res.json(updatedOrder);
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
-    
     console.error('Error updating IVM order:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Delete an IVM Order
 exports.deleteIVMOrder = async (req, res) => {

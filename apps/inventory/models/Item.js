@@ -11,6 +11,11 @@ const IvmItemSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  avgPrice: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   description: {
     type: String,
     default: "",
@@ -22,7 +27,7 @@ const IvmItemSchema = new mongoose.Schema({
   }],
   categoryId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'IvmCategory', // Reference ivmCategories instead of Category
+    ref: 'IvmCategory',
     required: true
   },
   categoryName: {
@@ -30,6 +35,11 @@ const IvmItemSchema = new mongoose.Schema({
     required: true
   },
   quantity: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalPurchaseValue: {
     type: Number,
     default: 0,
     min: 0
