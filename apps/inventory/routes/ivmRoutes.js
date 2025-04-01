@@ -7,7 +7,8 @@ router.get('/count', ivmOrderController.getOrderCounts);
 router.get('/type/:orderType', ivmOrderController.getOrdersByType);
 router.get('/order-values', ivmOrderController.getOrderValues);
 router.get('/purchase-stats', ivmOrderController.getPurchaseOrderStats);
-
+router.get('/sale-stats', ivmOrderController.getSaleOrderStats);
+router.get('/stockout-stats', ivmOrderController.getStockoutOrderStats);
 
 // Get all orders
 router.get('/', ivmOrderController.getAllIVMOrders);

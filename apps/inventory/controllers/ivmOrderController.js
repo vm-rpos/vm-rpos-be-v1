@@ -210,6 +210,138 @@ exports.getPurchaseOrderStats = async (req, res) => {
   }
 };
 
+// Get sale order statistics with filtering
+exports.getSaleOrderStats = async (req, res) => {
+  try {
+    const { status, dateFilter } = req.query;
+    
+    // Create filter object
+    const filter = { orderType: 'saleOrder' };
+    
+    // Filter by status
+    if (status && status.toLowerCase() !== 'all') {
+      filter.status = status;
+    }
+    
+    // Apply date filtering
+    if (dateFilter && dateFilter !== 'all') {
+      const today = startOfDay(new Date());
+      let startDate;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'this week':
+          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+          break;
+        case 'this month':
+          startDate = startOfMonth(today);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.expectedDeliveryDate = { $gte: startDate };
+      }
+    }
+
+    // Get filtered orders
+    const saleOrders = await IVMOrder.find(filter)
+      .populate('items.itemId');
+    
+    // Calculate statistics
+    const orderCount = saleOrders.length;
+    
+    let totalItems = 0;
+    let totalAmount = 0;
+    
+    // Calculate totals
+    saleOrders.forEach(order => {
+      order.items.forEach(item => {
+        totalItems += item.quantity;
+        totalAmount += item.price * item.quantity;
+      });
+    });
+    
+    res.json({
+      orderCount,
+      totalItems,
+      totalAmount: parseFloat(totalAmount.toFixed(2))
+    });
+  } catch (err) {
+    console.error('Error fetching sale order statistics:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get stockout order statistics with filtering
+exports.getStockoutOrderStats = async (req, res) => {
+  try {
+    const { status, dateFilter } = req.query;
+    
+    // Create filter object
+    const filter = { orderType: 'stockoutOrder' };
+    
+    // Filter by status
+    if (status && status.toLowerCase() !== 'all') {
+      filter.status = status;
+    }
+    
+    // Apply date filtering
+    if (dateFilter && dateFilter !== 'all') {
+      const today = startOfDay(new Date());
+      let startDate;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'this week':
+          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+          break;
+        case 'this month':
+          startDate = startOfMonth(today);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.expectedDeliveryDate = { $gte: startDate };
+      }
+    }
+
+    // Get filtered orders
+    const stockoutOrders = await IVMOrder.find(filter)
+      .populate('items.itemId');
+    
+    // Calculate statistics
+    const orderCount = stockoutOrders.length;
+    
+    let totalItems = 0;
+    let totalAmount = 0;
+    
+    // Calculate totals
+    stockoutOrders.forEach(order => {
+      order.items.forEach(item => {
+        totalItems += item.quantity;
+        totalAmount += item.price * item.quantity;
+      });
+    });
+    
+    res.json({
+      orderCount,
+      totalItems,
+      totalAmount: parseFloat(totalAmount.toFixed(2))
+    });
+  } catch (err) {
+    console.error('Error fetching stockout order statistics:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get orders by type with date filtering
 exports.getOrdersByType = async (req, res) => {
   try {
