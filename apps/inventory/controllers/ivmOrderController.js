@@ -144,10 +144,114 @@ exports.getAllIVMOrders = async (req, res) => {
   }
 };
 
-// Get purchase order statistics with filtering
+// Get orders by type with search, filtering, and pagination
+exports.getOrdersByType = async (req, res) => {
+  try {
+    const { orderType } = req.params;
+    const { status, dateFilter, searchTerm, page, pageSize } = req.query;
+    
+    if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
+      return res.status(400).json({ message: 'Invalid order type' });
+    }
+    
+    // Create filter object
+    const filter = { orderType };
+    
+    // Filter by status
+    if (status && status.toLowerCase() !== 'all') {
+      filter.status = status;
+    }
+    
+    // Apply date filtering
+    if (dateFilter && dateFilter !== 'all') {
+      const today = startOfDay(new Date());
+      let startDate;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'this week':
+          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+          break;
+        case 'this month':
+          startDate = startOfMonth(today);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.expectedDeliveryDate = { $gte: startDate };
+      }
+    }
+
+    // Search functionality
+    let searchQuery = {};
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchRegex = new RegExp(searchTerm.trim(), 'i');
+      
+      // Find vendors that match the search term
+      const vendors = await Vendor.find({ name: searchRegex });
+      const vendorIds = vendors.map(vendor => vendor._id);
+      
+      // Find items that match the search term
+      const items = await Item.find({ name: searchRegex });
+      const itemIds = items.map(item => item._id);
+      
+      searchQuery = {
+        $or: [
+          { vendorId: { $in: vendorIds } },
+          { 'items.name': searchRegex },
+          { status: searchRegex },
+          { 'items.itemId': { $in: itemIds } }
+        ]
+      };
+    }
+
+    // Combine main filter with search query
+    const finalFilter = searchTerm && searchTerm.trim() !== '' 
+      ? { $and: [filter, searchQuery] } 
+      : filter;
+    
+    // Pagination
+    const currentPage = parseInt(page) || 1;
+    const itemsPerPage = parseInt(pageSize) || 10;
+    const skip = (currentPage - 1) * itemsPerPage;
+    
+    // Get total count for pagination
+    const totalCount = await IVMOrder.countDocuments(finalFilter);
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    
+    // Get paginated orders
+    const orders = await IVMOrder.find(finalFilter)
+      .populate('vendorId')
+      .populate('items.itemId')
+      .sort({ createdAt: -1 }) // Most recent first
+      .skip(skip)
+      .limit(itemsPerPage);
+    
+    // Return orders with pagination metadata
+    res.json({
+      orders,
+      pagination: {
+        currentPage,
+        totalPages,
+        totalCount,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching orders by type:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Also update the purchase stats function to include search:
 exports.getPurchaseOrderStats = async (req, res) => {
   try {
-    const { status, dateFilter } = req.query;
+    const { status, dateFilter, searchTerm } = req.query;
     
     // Create filter object
     const filter = { orderType: 'purchaseOrder' };
@@ -181,8 +285,36 @@ exports.getPurchaseOrderStats = async (req, res) => {
       }
     }
 
+    // Search functionality
+    let searchQuery = {};
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchRegex = new RegExp(searchTerm.trim(), 'i');
+      
+      // Find vendors that match the search term
+      const vendors = await Vendor.find({ name: searchRegex });
+      const vendorIds = vendors.map(vendor => vendor._id);
+      
+      // Find items that match the search term
+      const items = await Item.find({ name: searchRegex });
+      const itemIds = items.map(item => item._id);
+      
+      searchQuery = {
+        $or: [
+          { vendorId: { $in: vendorIds } },
+          { 'items.name': searchRegex },
+          { status: searchRegex },
+          { 'items.itemId': { $in: itemIds } }
+        ]
+      };
+    }
+
+    // Combine main filter with search query
+    const finalFilter = searchTerm && searchTerm.trim() !== '' 
+      ? { $and: [filter, searchQuery] } 
+      : filter;
+
     // Get filtered orders
-    const purchaseOrders = await IVMOrder.find(filter)
+    const purchaseOrders = await IVMOrder.find(finalFilter)
       .populate('items.itemId');
     
     // Calculate statistics
@@ -209,6 +341,125 @@ exports.getPurchaseOrderStats = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Get purchase order statistics with filtering
+// exports.getPurchaseOrderStats = async (req, res) => {
+//   try {
+//     const { status, dateFilter } = req.query;
+    
+//     // Create filter object
+//     const filter = { orderType: 'purchaseOrder' };
+    
+//     // Filter by status
+//     if (status && status.toLowerCase() !== 'all') {
+//       filter.status = status;
+//     }
+    
+//     // Apply date filtering
+//     if (dateFilter && dateFilter !== 'all') {
+//       const today = startOfDay(new Date());
+//       let startDate;
+      
+//       switch (dateFilter) {
+//         case 'today':
+//           startDate = today;
+//           break;
+//         case 'this week':
+//           startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+//           break;
+//         case 'this month':
+//           startDate = startOfMonth(today);
+//           break;
+//         default:
+//           startDate = null;
+//       }
+      
+//       if (startDate) {
+//         filter.expectedDeliveryDate = { $gte: startDate };
+//       }
+//     }
+
+//     // Get filtered orders
+//     const purchaseOrders = await IVMOrder.find(filter)
+//       .populate('items.itemId');
+    
+//     // Calculate statistics
+//     const orderCount = purchaseOrders.length;
+    
+//     let totalItems = 0;
+//     let totalAmount = 0;
+    
+//     // Calculate totals
+//     purchaseOrders.forEach(order => {
+//       order.items.forEach(item => {
+//         totalItems += item.quantity;
+//         totalAmount += item.price * item.quantity;
+//       });
+//     });
+    
+//     res.json({
+//       orderCount,
+//       totalItems,
+//       totalAmount: parseFloat(totalAmount.toFixed(2))
+//     });
+//   } catch (err) {
+//     console.error('Error fetching purchase order statistics:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+// Get orders by type with date filtering
+// exports.getOrdersByType = async (req, res) => {
+//   try {
+//     const { orderType } = req.params;
+//     const { status, dateFilter } = req.query;
+    
+//     if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
+//       return res.status(400).json({ message: 'Invalid order type' });
+//     }
+    
+//     // Create filter object
+//     const filter = { orderType };
+    
+//     // Filter by status
+//     if (status && status.toLowerCase() !== 'all') {
+//       filter.status = status;
+//     }
+    
+//     // Apply date filtering
+//     if (dateFilter && dateFilter !== 'all') {
+//       const today = startOfDay(new Date());
+//       let startDate;
+      
+//       switch (dateFilter) {
+//         case 'today':
+//           startDate = today;
+//           break;
+//         case 'this week':
+//           startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+//           break;
+//         case 'this month':
+//           startDate = startOfMonth(today);
+//           break;
+//         default:
+//           startDate = null;
+//       }
+      
+//       if (startDate) {
+//         filter.expectedDeliveryDate = { $gte: startDate };
+//       }
+//     }
+    
+//     const orders = await IVMOrder.find(filter)
+//       .populate('vendorId')
+//       .populate('items.itemId');
+    
+//     res.json(orders);
+//   } catch (err) {
+//     console.error('Error fetching orders by type:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
 
 // Get sale order statistics with filtering
 exports.getSaleOrderStats = async (req, res) => {
@@ -342,58 +593,6 @@ exports.getStockoutOrderStats = async (req, res) => {
   }
 };
 
-// Get orders by type with date filtering
-exports.getOrdersByType = async (req, res) => {
-  try {
-    const { orderType } = req.params;
-    const { status, dateFilter } = req.query;
-    
-    if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
-      return res.status(400).json({ message: 'Invalid order type' });
-    }
-    
-    // Create filter object
-    const filter = { orderType };
-    
-    // Filter by status
-    if (status && status.toLowerCase() !== 'all') {
-      filter.status = status;
-    }
-    
-    // Apply date filtering
-    if (dateFilter && dateFilter !== 'all') {
-      const today = startOfDay(new Date());
-      let startDate;
-      
-      switch (dateFilter) {
-        case 'today':
-          startDate = today;
-          break;
-        case 'this week':
-          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-          break;
-        case 'this month':
-          startDate = startOfMonth(today);
-          break;
-        default:
-          startDate = null;
-      }
-      
-      if (startDate) {
-        filter.expectedDeliveryDate = { $gte: startDate };
-      }
-    }
-    
-    const orders = await IVMOrder.find(filter)
-      .populate('vendorId')
-      .populate('items.itemId');
-    
-    res.json(orders);
-  } catch (err) {
-    console.error('Error fetching orders by type:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
 
 // Update IVM Order status
 exports.updateOrderStatus = async (req, res) => {
