@@ -144,6 +144,72 @@ exports.getAllIVMOrders = async (req, res) => {
   }
 };
 
+// Get purchase order statistics with filtering
+exports.getPurchaseOrderStats = async (req, res) => {
+  try {
+    const { status, dateFilter } = req.query;
+    
+    // Create filter object
+    const filter = { orderType: 'purchaseOrder' };
+    
+    // Filter by status
+    if (status && status.toLowerCase() !== 'all') {
+      filter.status = status;
+    }
+    
+    // Apply date filtering
+    if (dateFilter && dateFilter !== 'all') {
+      const today = startOfDay(new Date());
+      let startDate;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'this week':
+          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+          break;
+        case 'this month':
+          startDate = startOfMonth(today);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.expectedDeliveryDate = { $gte: startDate };
+      }
+    }
+
+    // Get filtered orders
+    const purchaseOrders = await IVMOrder.find(filter)
+      .populate('items.itemId');
+    
+    // Calculate statistics
+    const orderCount = purchaseOrders.length;
+    
+    let totalItems = 0;
+    let totalAmount = 0;
+    
+    // Calculate totals
+    purchaseOrders.forEach(order => {
+      order.items.forEach(item => {
+        totalItems += item.quantity;
+        totalAmount += item.price * item.quantity;
+      });
+    });
+    
+    res.json({
+      orderCount,
+      totalItems,
+      totalAmount: parseFloat(totalAmount.toFixed(2))
+    });
+  } catch (err) {
+    console.error('Error fetching purchase order statistics:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get orders by type with date filtering
 exports.getOrdersByType = async (req, res) => {
   try {

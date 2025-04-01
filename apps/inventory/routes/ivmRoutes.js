@@ -6,6 +6,7 @@ const ivmOrderController = require('../controllers/ivmOrderController');
 router.get('/count', ivmOrderController.getOrderCounts);
 router.get('/type/:orderType', ivmOrderController.getOrdersByType);
 router.get('/order-values', ivmOrderController.getOrderValues);
+router.get('/purchase-stats', ivmOrderController.getPurchaseOrderStats);
 
 
 // Get all orders
