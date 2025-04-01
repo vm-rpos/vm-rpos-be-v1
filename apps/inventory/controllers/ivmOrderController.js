@@ -2,6 +2,7 @@ const IVMOrder = require('../models/IVMOrder');
 const Vendor = require('../models/Vendor');
 const Item = require('../models/Item');
 const mongoose = require('mongoose');
+const { startOfDay, startOfWeek, startOfMonth } = require('date-fns');
 
 // Create an IVM Order
 exports.createIVMOrder = async (req, res) => {
@@ -54,7 +55,6 @@ exports.createIVMOrder = async (req, res) => {
         const newTotalQuantity = existingItem.quantity + item.quantity;
         const newTotalPurchaseValue = (existingItem.totalPurchaseValue || 0) + (item.price * item.quantity);
         const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
-        // const newAvgPrice = newTotalPurchaseValue / newTotalQuantity;
 
         // Update item details
         await Item.findByIdAndUpdate(
@@ -91,20 +91,52 @@ exports.createIVMOrder = async (req, res) => {
   }
 };
 
-// Get all IVM Orders
+// Get all IVM Orders with filtering
 exports.getAllIVMOrders = async (req, res) => {
   try {
-    const { orderType } = req.query;
+    const { orderType, status, dateFilter } = req.query;
     
     // Create filter object
     const filter = {};
+    
+    // Filter by order type
     if (orderType) {
       filter.orderType = orderType;
+    }
+    
+    // Filter by status
+    if (status && status.toLowerCase() !== 'all') {
+      filter.status = status;
+    }
+    
+    // Apply date filtering
+    if (dateFilter && dateFilter !== 'all') {
+      const today = startOfDay(new Date());
+      let startDate;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'this week':
+          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+          break;
+        case 'this month':
+          startDate = startOfMonth(today);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.expectedDeliveryDate = { $gte: startDate };
+      }
     }
     
     const orders = await IVMOrder.find(filter)
       .populate('vendorId')
       .populate('items.itemId');
+    
     res.json(orders);
   } catch (err) {
     console.error('Error fetching IVM orders:', err);
@@ -112,16 +144,49 @@ exports.getAllIVMOrders = async (req, res) => {
   }
 };
 
-// Get orders by type
+// Get orders by type with date filtering
 exports.getOrdersByType = async (req, res) => {
   try {
     const { orderType } = req.params;
+    const { status, dateFilter } = req.query;
     
     if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
       return res.status(400).json({ message: 'Invalid order type' });
     }
     
-    const orders = await IVMOrder.find({ orderType })
+    // Create filter object
+    const filter = { orderType };
+    
+    // Filter by status
+    if (status && status.toLowerCase() !== 'all') {
+      filter.status = status;
+    }
+    
+    // Apply date filtering
+    if (dateFilter && dateFilter !== 'all') {
+      const today = startOfDay(new Date());
+      let startDate;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'this week':
+          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+          break;
+        case 'this month':
+          startDate = startOfMonth(today);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.expectedDeliveryDate = { $gte: startDate };
+      }
+    }
+    
+    const orders = await IVMOrder.find(filter)
       .populate('vendorId')
       .populate('items.itemId');
     
@@ -256,7 +321,7 @@ exports.getOrderCounts = async (req, res) => {
 
 exports.getOrderValues = async (req, res) => {
   try {
-    const orders = await IvmOrder.find();
+    const orders = await IVMOrder.find();
 
     const orderValues = {
       purchaseOrder: 0,
