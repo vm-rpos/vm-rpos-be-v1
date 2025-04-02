@@ -2,7 +2,7 @@ const IVMOrder = require('../models/IVMOrder');
 const Vendor = require('../models/Vendor');
 const Item = require('../models/Item');
 const mongoose = require('mongoose');
-const { startOfDay, startOfWeek, startOfMonth } = require('date-fns');
+const { startOfDay, startOfWeek, startOfMonth,endOfDay } = require('date-fns');
 
 // Create an IVM Order
 exports.createIVMOrder = async (req, res) => {
@@ -94,49 +94,14 @@ exports.createIVMOrder = async (req, res) => {
 // Get all IVM Orders with filtering
 exports.getAllIVMOrders = async (req, res) => {
   try {
-    const { orderType, status, dateFilter } = req.query;
-    
-    // Create filter object
-    const filter = {};
-    
-    // Filter by order type
-    if (orderType) {
-      filter.orderType = orderType;
-    }
-    
-    // Filter by status
-    if (status && status.toLowerCase() !== 'all') {
-      filter.status = status;
-    }
-    
-    // Apply date filtering
-    if (dateFilter && dateFilter !== 'all') {
-      const today = startOfDay(new Date());
-      let startDate;
-      
-      switch (dateFilter) {
-        case 'today':
-          startDate = today;
-          break;
-        case 'this week':
-          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-          break;
-        case 'this month':
-          startDate = startOfMonth(today);
-          break;
-        default:
-          startDate = null;
-      }
-      
-      if (startDate) {
-        filter.expectedDeliveryDate = { $gte: startDate };
-      }
-    }
-    
-    const orders = await IVMOrder.find(filter)
+    console.log("Received request for getAllIVMOrders");
+
+    const orders = await IVMOrder.find()
       .populate('vendorId')
       .populate('items.itemId');
-    
+
+    console.log("Fetched orders count:", orders.length);
+
     res.json(orders);
   } catch (err) {
     console.error('Error fetching IVM orders:', err);
@@ -144,48 +109,86 @@ exports.getAllIVMOrders = async (req, res) => {
   }
 };
 
+
 // Get orders by type with search, filtering, and pagination
+// Add these imports at the top if not already present
+//const { startOfDay, endOfDay, startOfWeek, startOfMonth } = require('date-fns');
+
 exports.getOrdersByType = async (req, res) => {
   try {
     const { orderType } = req.params;
-    const { status, dateFilter, searchTerm, page, pageSize } = req.query;
-    
+    const { 
+      status, 
+      dateFilter, 
+      searchTerm, 
+      page, 
+      pageSize, 
+      startDate, 
+      endDate,
+      dateField = 'createdAt' // Default to createdAt if not specified
+    } = req.query;
+
+    console.log("Received request for getOrdersByType");
+    console.log("Params:", req.params);
+    console.log("Query Params:", req.query);
+
     if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
+      console.log("Invalid order type:", orderType);
       return res.status(400).json({ message: 'Invalid order type' });
     }
-    
+
     // Create filter object
     const filter = { orderType };
-    
+
     // Filter by status
     if (status && status.toLowerCase() !== 'all') {
       filter.status = status;
     }
-    
+
     // Apply date filtering
     if (dateFilter && dateFilter !== 'all') {
       const today = startOfDay(new Date());
-      let startDate;
+      const dateFieldToFilter = dateField; // Use the specified date field
       
-      switch (dateFilter) {
-        case 'today':
-          startDate = today;
-          break;
-        case 'this week':
-          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-          break;
-        case 'this month':
-          startDate = startOfMonth(today);
-          break;
-        default:
-          startDate = null;
-      }
-      
-      if (startDate) {
-        filter.expectedDeliveryDate = { $gte: startDate };
+      // For custom date range
+      if (dateFilter === 'custom' && startDate && endDate) {
+        const start = startOfDay(new Date(startDate));
+        const end = endOfDay(new Date(endDate));
+        
+        filter[dateFieldToFilter] = { 
+          $gte: start, 
+          $lte: end 
+        };
+        
+        console.log(`Custom date range applied: ${start} to ${end} on field ${dateFieldToFilter}`);
+      } else {
+        // For predefined date filters
+        let startDate;
+        
+        switch (dateFilter) {
+          case 'today':
+            startDate = today;
+            break;
+          case 'this week':
+            startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+            break;
+          case 'this month':
+            startDate = startOfMonth(today);
+            break;
+          default:
+            startDate = null;
+        }
+        
+        if (startDate) {
+          filter[dateFieldToFilter] = { $gte: startDate };
+        }
       }
     }
 
+    console.log("Filter before search:", JSON.stringify(filter));
+
+    // Rest of the function remains the same...
+    
     // Search functionality
     let searchQuery = {};
     if (searchTerm && searchTerm.trim() !== '') {
@@ -193,35 +196,44 @@ exports.getOrdersByType = async (req, res) => {
       
       // Find vendors that match the search term
       const vendors = await Vendor.find({ name: searchRegex });
-      const vendorIds = vendors.map(vendor => vendor._id);
+      const vendorIds = vendors.map((vendor) => vendor._id);
       
       // Find items that match the search term
       const items = await Item.find({ name: searchRegex });
-      const itemIds = items.map(item => item._id);
+      const itemIds = items.map((item) => item._id);
       
       searchQuery = {
         $or: [
           { vendorId: { $in: vendorIds } },
           { 'items.name': searchRegex },
           { status: searchRegex },
-          { 'items.itemId': { $in: itemIds } }
-        ]
+          { 'items.itemId': { $in: itemIds } },
+        ],
       };
+      
+      console.log("Search query applied:", JSON.stringify(searchQuery));
     }
-
+    
     // Combine main filter with search query
-    const finalFilter = searchTerm && searchTerm.trim() !== '' 
-      ? { $and: [filter, searchQuery] } 
-      : filter;
+    const finalFilter = 
+      searchTerm && searchTerm.trim() !== ''
+        ? { $and: [filter, searchQuery] }
+        : filter;
+    
+    console.log("Final filter applied:", JSON.stringify(finalFilter));
     
     // Pagination
     const currentPage = parseInt(page) || 1;
     const itemsPerPage = parseInt(pageSize) || 10;
     const skip = (currentPage - 1) * itemsPerPage;
     
+    console.log(`Pagination - Page: ${currentPage}, Items Per Page: ${itemsPerPage}, Skip: ${skip}`);
+    
     // Get total count for pagination
     const totalCount = await IVMOrder.countDocuments(finalFilter);
     const totalPages = Math.ceil(totalCount / itemsPerPage);
+    
+    console.log("Total orders found:", totalCount);
     
     // Get paginated orders
     const orders = await IVMOrder.find(finalFilter)
@@ -231,6 +243,8 @@ exports.getOrdersByType = async (req, res) => {
       .skip(skip)
       .limit(itemsPerPage);
     
+    console.log("Orders returned:", orders.length);
+    
     // Return orders with pagination metadata
     res.json({
       orders,
@@ -239,14 +253,15 @@ exports.getOrdersByType = async (req, res) => {
         totalPages,
         totalCount,
         hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1
-      }
+        hasPrevPage: currentPage > 1,
+      },
     });
   } catch (err) {
     console.error('Error fetching orders by type:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Also update the purchase stats function to include search:
 exports.getPurchaseOrderStats = async (req, res) => {
