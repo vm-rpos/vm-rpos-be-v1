@@ -5,31 +5,40 @@ const jwt = require("jsonwebtoken");
 // Use separate secrets for different token types
 const ACCESS_TOKEN_SECRET = "Kedhareswarmatha";
 const REFRESH_TOKEN_SECRET = "KedhareswarmathaRefresh";
+const ACCESS_TOKEN_EXPIRY = "1h";
+const REFRESH_TOKEN_EXPIRY = "7d";
+const MAX_TOKENS_PER_USER = 5;
 
-// Generate access token (short-lived)
-const generateAccessToken = (user) => {
-  console.log(`Generating access token for user: ${user._id}`);
-  return jwt.sign(
-    {
-      userId: user._id,
-      restaurantId: user.restaurantId,
-    },
-    ACCESS_TOKEN_SECRET,
-    { expiresIn: "15m" } // Short expiration for security
-  );
+
+// Helper function to clean expired tokens
+const cleanExpiredTokens = async (user) => {
+  const now = new Date();
+  user.tokens = user.tokens.filter(token => {
+    try {
+      const decoded = jwt.verify(token.refreshToken, REFRESH_TOKEN_SECRET);
+      return decoded.exp * 1000 > now.getTime();
+    } catch (err) {
+      return false; // Remove if token is invalid/expired
+    }
+  });
+  await user.save();
 };
 
-// Generate refresh token (long-lived)
-const generateRefreshToken = (user) => {
-  console.log(`Generating refresh token for user: ${user._id}`);
-  return jwt.sign(
-    {
-      userId: user._id,
-      restaurantId: user.restaurantId,
-    },
-    REFRESH_TOKEN_SECRET,
-    { expiresIn: "7d" } // Longer expiration
+// Generate tokens with timestamp
+const generateTokens = (user) => {
+  const accessToken = jwt.sign(
+    { userId: user._id, restaurantId: user.restaurantId },
+    ACCESS_TOKEN_SECRET,
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
   );
+  
+  const refreshToken = jwt.sign(
+    { userId: user._id, restaurantId: user.restaurantId },
+    REFRESH_TOKEN_SECRET,
+    { expiresIn: REFRESH_TOKEN_EXPIRY }
+  );
+
+  return { accessToken, refreshToken };
 };
 
 // User Signup
@@ -82,79 +91,88 @@ exports.signup = async (req, res) => {
 };
 
 // User Login with password
+// User Login with token management
 exports.login = async (req, res) => {
   try {
-    console.log("Login attempt:", req.body.email);
     const { email, password } = req.body;
     
     const user = await User.findOne({ email });
     if (!user) {
-      console.log("Login failed: User not found");
       return res.status(400).json({ error: "Invalid credentials" });
     }
     
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log("Login failed: Password mismatch");
       return res.status(400).json({ error: "Invalid credentials" });
     }
-    
-    // Generate both tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    
-    console.log("Access token generated:", accessToken.substring(0, 10) + "...");
-    console.log("Refresh token generated:", refreshToken.substring(0, 10) + "...");
-    
-    // Store refresh token in database
-    user.refreshTokens = user.refreshTokens || [];
-    user.refreshTokens.push(refreshToken);
+
+    // Clean expired tokens before adding new ones
+    await cleanExpiredTokens(user);
+
+    // Generate new tokens
+    const { accessToken, refreshToken } = generateTokens(user);
+
+    // If we're at max capacity, remove the oldest token (FIFO)
+    if (user.tokens.length >= MAX_TOKENS_PER_USER) {
+      user.tokens.shift(); // Remove the first/oldest token
+    }
+
+    // Add the new token pair
+    user.tokens.push({
+      accessToken,
+      refreshToken,
+      createdAt: new Date()
+    });
+
     await user.save();
-    console.log("Refresh token saved to database for user:", user._id);
-    
-    // Return user data with both tokens
+
     res.json({
       accessToken,
       refreshToken,
-      requirePin: true, // Indicate that PIN verification is required
+      requirePin: true,
       user: {
         _id: user._id,
         email: user.email,
         restaurantId: user.restaurantId,
         firstname: user.firstname,
         lastname: user.lastname,
-        role: user.role // Include the role in the response
+        role: user.role
       }
     });
-    console.log("Login successful for:", email);
   } catch (error) {
-    console.error("Login error:", error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
 // Verify PIN after login
+// Verify PIN - remains mostly the same but uses the new token structure
 exports.verifyPin = async (req, res) => {
   try {
-    console.log("PIN verification attempt for user:", req.body.userId);
     const { userId, pin } = req.body;
     
     const user = await User.findById(userId);
     if (!user) {
-      console.log("PIN verification failed: User not found");
       return res.status(400).json({ error: "User not found" });
     }
     
     const isPinMatch = await bcrypt.compare(pin, user.pin);
     if (!isPinMatch) {
-      console.log("PIN verification failed: Invalid PIN");
       return res.status(400).json({ error: "Invalid PIN" });
     }
-    
-    // PIN is correct, create a new access token
-    const accessToken = generateAccessToken(user);
-    console.log("New access token generated after PIN verification:", accessToken.substring(0, 10) + "...");
-    
+
+    // Generate new access token (refresh token remains the same)
+    const accessToken = jwt.sign(
+      { userId: user._id, restaurantId: user.restaurantId },
+      ACCESS_TOKEN_SECRET,
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
+    );
+
+    // Update the most recent token with the new access token
+    if (user.tokens.length > 0) {
+      user.tokens[user.tokens.length - 1].accessToken = accessToken;
+      await user.save();
+    }
+
     res.json({
       accessToken,
       user: {
@@ -163,96 +181,89 @@ exports.verifyPin = async (req, res) => {
         restaurantId: user.restaurantId,
         firstname: user.firstname,
         lastname: user.lastname,
-        role: user.role // Include the role
+        role: user.role
       }
     });
-    console.log("PIN verification successful for user:", userId);
   } catch (error) {
-    console.error("PIN verification error:", error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-// Refresh token endpoint
+// Refresh token endpoint with cleanup
 exports.refreshToken = async (req, res) => {
   try {
-    console.log("Token refresh request received");
     const { refreshToken } = req.body;
     
     if (!refreshToken) {
-      console.log("Token refresh failed: No refresh token provided");
       return res.status(401).json({ error: "Refresh token required" });
     }
-    
+
     // Verify the refresh token
-    console.log("Verifying refresh token:", refreshToken.substring(0, 10) + "...");
     const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
-    console.log("Refresh token verified for user:", decoded.userId);
-    
-    // Find user and check if the refresh token exists in their tokens array
     const user = await User.findById(decoded.userId);
-    
+
     if (!user) {
-      console.log("Token refresh failed: User not found");
       return res.status(403).json({ error: "Invalid refresh token" });
     }
-    
-    if (!user.refreshTokens.includes(refreshToken)) {
-      console.log("Token refresh failed: Token not found in user's tokens");
+
+    // Find the specific token pair
+    const tokenIndex = user.tokens.findIndex(t => t.refreshToken === refreshToken);
+    if (tokenIndex === -1) {
       return res.status(403).json({ error: "Invalid refresh token" });
     }
-    
-    // Generate a new access token
-    const accessToken = generateAccessToken(user);
-    console.log("New access token generated:", accessToken.substring(0, 10) + "...");
-    
+
+    // Clean expired tokens
+    await cleanExpiredTokens(user);
+
+    // Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+
+    // Replace the old token pair with the new one
+    user.tokens[tokenIndex] = {
+      accessToken,
+      refreshToken: newRefreshToken,
+      createdAt: new Date()
+    };
+
+    await user.save();
+
     res.json({
       accessToken,
-      requirePin: true, // Always require PIN after refreshing token
+      refreshToken: newRefreshToken,
+      requirePin: true,
       user: {
         _id: user._id,
         email: user.email,
         restaurantId: user.restaurantId,
         firstname: user.firstname,
         lastname: user.lastname,
-        role: user.role // Include the role
+        role: user.role
       }
     });
-    console.log("Token refresh successful for user:", user._id);
   } catch (error) {
-    console.error("Token refresh error:", error.message);
     return res.status(403).json({ error: "Invalid refresh token" });
   }
 };
 
-// Logout user
+// Logout - remove all tokens
 exports.logout = async (req, res) => {
   try {
-    console.log("Logout request received");
     const { refreshToken } = req.body;
     
     if (!refreshToken) {
-      console.log("No refresh token provided for logout");
       return res.status(400).json({ error: "Refresh token required" });
     }
     
-    // Find the user with this refresh token
-    const user = await User.findOne({ refreshTokens: refreshToken });
+    const user = await User.findOne({ "tokens.refreshToken": refreshToken });
     
     if (user) {
-      console.log("Removing refresh token for user:", user._id);
-      // Remove the refresh token from the user's tokens array
-      user.refreshTokens = user.refreshTokens.filter(token => token !== refreshToken);
+      // Remove all tokens for this user
+      user.tokens = [];
       await user.save();
-      console.log("Refresh token removed successfully");
-    } else {
-      console.log("No user found with the provided refresh token");
     }
     
     res.json({ message: "Logged out successfully" });
-    console.log("Logout successful");
   } catch (error) {
-    console.error("Logout error:", error.message);
     res.status(500).json({ error: error.message });
   }
 };

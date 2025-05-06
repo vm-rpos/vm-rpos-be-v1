@@ -9,7 +9,11 @@ const UserSchema = new mongoose.Schema({
   restaurantId: { type: String, required: true },
   pin: { type: String, required: true },
   role: { type: String, enum: ["admin", "pos"], required: true },
-  refreshTokens: [{ type: String }],
+  tokens: [{
+    accessToken: { type: String },
+    refreshToken: { type: String },
+    createdAt: { type: Date, default: Date.now }
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", UserSchema);

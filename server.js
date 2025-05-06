@@ -11,6 +11,7 @@ const waiterRoutes = require("./apps/pos/routes/waiterRoutes");
 const tagRoutes = require("./apps/pos/routes/tagRoutes");
 const printerRoutes = require("./apps/pos/routes/printerRoutes");
 const orderRoutes = require("./apps/pos/routes/orderRoutes");
+const sectionRoutes = require("./apps/pos/routes/sectionRoutes");
 const vendorIvmRoutes = require("./apps/inventory/routes/vendorIvmRoutes");
 // const purchaseOrderIvmRoutes = require("./apps/inventory/routes/purchaseOrderIvmRoutes");
 const tagIvmRoutes = require("./apps/inventory/routes/tagIvmRoutes");
@@ -40,6 +41,7 @@ app.use('/api/waiters', waiterRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api', printerRoutes);
 app.use('/api/orders',orderRoutes);
+app.use('/api/sections', sectionRoutes);
 
 // Inventory API Routes
 app.use('/api-ivm/categories', categoryIvmRoutes);
