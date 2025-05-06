@@ -154,16 +154,15 @@ exports.deleteCategory = async (req, res) => {
   }
 };
 
-// Add item to category with tag handling
+// Add item to category with tag and sectionData handling
 exports.addItemToCategory = async (req, res) => {
   try {
-    const { name, price, description, tags } = req.body;
+    const { name, description, tags, sectionData } = req.body;
 
-    if (!name || price === undefined) {
-      return res.status(400).json({ message: "Item name and price are required" });
+    if (!name) {
+      return res.status(400).json({ message: "Item name is required" });
     }
 
-    // Ensure the request is authenticated and contains restaurantId
     if (!req.user || !req.user.restaurantId) {
       return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
     }
@@ -173,7 +172,6 @@ exports.addItemToCategory = async (req, res) => {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    // Ensure the category belongs to the same restaurant
     if (category.restaurantId.toString() !== req.user.restaurantId) {
       return res.status(403).json({ message: "Unauthorized: Category does not belong to your restaurant" });
     }
@@ -181,36 +179,40 @@ exports.addItemToCategory = async (req, res) => {
     const existingItem = await Item.findOne({
       categoryId: category._id,
       name,
-      restaurantId: req.user.restaurantId, // Ensure uniqueness within a restaurant
+      restaurantId: req.user.restaurantId,
     });
 
     if (existingItem) {
       return res.status(400).json({ message: "Item with this name already exists in the category" });
     }
 
-    // Handle tags
+    // Process tags
     let tagIds = [];
     if (tags && tags.length > 0) {
       for (const tagName of tags) {
         let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, "i") } });
-
         if (!tag) {
           tag = new Tag({ name: tagName });
           await tag.save();
         }
-
         tagIds.push(tag._id);
       }
     }
 
+    // Handle sectionData if provided
+    let itemSectionData = [];
+    if (Array.isArray(sectionData) && sectionData.length > 0) {
+      itemSectionData = sectionData; // Store provided sectionData
+    }
+
     const newItem = new Item({
       name,
-      price,
       description: description || "",
       tags: tagIds,
       categoryId: category._id,
       categoryName: category.name,
-      restaurantId: req.user.restaurantId, // Assign restaurantId
+      restaurantId: req.user.restaurantId,
+      sectionData: itemSectionData, // Store sectionData (empty if not provided)
     });
 
     await newItem.save();
@@ -223,48 +225,70 @@ exports.addItemToCategory = async (req, res) => {
   }
 };
 
-// Update item in category with tag handling
+
+// Update item in category with tag and sectionData handling
 exports.updateItemInCategory = async (req, res) => {
   try {
-    const { name, price, description, tags } = req.body;
-    if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
+    const { name, description, tags, sectionData } = req.body;
+
+    // Ensure name is provided
+    if (!name) {
+      return res.status(400).json({ message: 'Item name is required' });
+    }
 
     const category = await Category.findById(req.params.categoryId);
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
 
     const item = await Item.findOne({ _id: req.params.itemId, categoryId: category._id });
-    if (!item) return res.status(404).json({ message: 'Item not found' });
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
 
-    const duplicateItem = await Item.findOne({ categoryId: category._id, name, _id: { $ne: req.params.itemId } });
-    if (duplicateItem) return res.status(400).json({ message: 'Another item with this name already exists in the category' });
+    // Check for duplicate item name in the category
+    const duplicateItem = await Item.findOne({
+      categoryId: category._id,
+      name,
+      _id: { $ne: req.params.itemId },
+    });
+    if (duplicateItem) {
+      return res.status(400).json({ message: 'Another item with this name already exists in the category' });
+    }
 
-    // Handle tags
-    let tagIds = item.tags; // Default to current tags
-    
+    // Process tags if provided
+    let tagIds = item.tags;  // Default to current tags
     if (tags !== undefined) {
-      tagIds = [];
+      tagIds = [];  // Reset tags array
+
       // Process each tag name
       for (const tagName of tags) {
-        // Look for existing tag or create a new one
         let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, 'i') } });
-        
         if (!tag) {
           tag = new Tag({ name: tagName });
           await tag.save();
         }
-        
         tagIds.push(tag._id);
       }
     }
 
-    await Item.findByIdAndUpdate(req.params.itemId, { 
-      name, 
-      price, 
-      description: description !== undefined ? description : item.description,
-      tags: tagIds,
-      categoryName: category.name 
-    });
+    // Prepare update fields
+    const updatedFields = {
+      name,  // Updated name
+      description: description !== undefined ? description : item.description,  // If description is provided, update, else keep the existing one
+      tags: tagIds,  // Updated tags
+      categoryName: category.name,  // Keeping the category name as it is
+    };
 
+    // Handle sectionData update if provided
+    if (Array.isArray(sectionData)) {
+      updatedFields.sectionData = sectionData;  // Update section data if provided
+    }
+
+    // Update the item in the database
+    await Item.findByIdAndUpdate(req.params.itemId, updatedFields);
+
+    // Fetch updated list of items in the category
     const updatedItems = await Item.find({ categoryId: category._id }).populate('tags');
     res.json({ _id: category._id, name: category.name, items: updatedItems });
   } catch (err) {

@@ -177,7 +177,6 @@ exports.updateTable = async (req, res) => {
   }
 };
 
-
 // Delete a table and its orders
 exports.deleteTable = async (req, res) => {
   try {
