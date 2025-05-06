@@ -11,6 +11,11 @@ const TableSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  seats: {
+    type: Number,
+    required: true,
+    min: 1
+  },
   hasOrders: {
     type: Boolean,
     default: false

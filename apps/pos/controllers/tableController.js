@@ -71,47 +71,44 @@ exports.getAllTables = async (req, res) => {
 // Create a new table
 exports.createTable = async (req, res) => {
   try {
-    const { name, tableNumber, sectionId } = req.body;
+    const { name, tableNumber, sectionId, seats } = req.body;
 
-    // Validate input
-    if (!name || !tableNumber || !sectionId) {
-      return res.status(400).json({ message: "Table name, number, and sectionId are required" });
+    if (!name || !tableNumber || !sectionId || !seats) {
+      return res.status(400).json({ message: "Table name, number, sectionId, and seats are required" });
     }
 
-    if (isNaN(tableNumber)) {
-      return res.status(400).json({ message: "Table number must be a number" });
+    if (isNaN(tableNumber) || isNaN(seats)) {
+      return res.status(400).json({ message: "Table number and seats must be numeric" });
     }
 
     if (!req.user?.restaurantId) {
       return res.status(403).json({ message: "User does not have a valid restaurantId" });
     }
 
-    // Check if section exists
     const sectionExists = await Section.findById(sectionId);
     if (!sectionExists) {
       return res.status(400).json({ message: "Section does not exist" });
     }
 
-    // Check for duplicate table number
-    const existingTable = await Table.findOne({ 
-      tableNumber: parseInt(tableNumber), 
-      restaurantId: req.user.restaurantId 
+    const existingTable = await Table.findOne({
+      tableNumber: parseInt(tableNumber),
+      restaurantId: req.user.restaurantId
     });
     if (existingTable) {
       return res.status(400).json({ message: "Table number already exists for this restaurant" });
     }
 
-    // Create new table
     const newTable = new Table({
       name,
       tableNumber: parseInt(tableNumber),
       hasOrders: false,
       restaurantId: req.user.restaurantId,
-      sectionId
+      sectionId,
+      seats: parseInt(seats)
     });
 
     const savedTable = await newTable.save();
-    
+
     res.status(201).json({
       success: true,
       data: savedTable,
@@ -119,20 +116,16 @@ exports.createTable = async (req, res) => {
     });
   } catch (err) {
     console.error("Error creating table:", err);
-    res.status(500).json({ 
-      success: false,
-      message: "Server error",
-      error: err.message 
-    });
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
 
 // Update a table
 exports.updateTable = async (req, res) => {
   try {
-    const { name, tableNumber, sectionId } = req.body;
+    const { name, tableNumber, sectionId, seats } = req.body;
 
-    if (!name && !tableNumber && !sectionId) {
+    if (!name && !tableNumber && !sectionId && !seats) {
       return res.status(400).json({ message: 'At least one field must be provided' });
     }
 
@@ -152,6 +145,12 @@ exports.updateTable = async (req, res) => {
     }
 
     if (sectionId) updateData.sectionId = sectionId;
+    if (seats) {
+      if (isNaN(seats) || seats <= 0) {
+        return res.status(400).json({ message: 'Seats must be a positive number' });
+      }
+      updateData.seats = parseInt(seats);
+    }
 
     const updatedTable = await Table.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedTable) return res.status(404).json({ message: 'Table not found' });
@@ -166,6 +165,7 @@ exports.updateTable = async (req, res) => {
       name: updatedTable.name,
       tableNumber: updatedTable.tableNumber,
       sectionId: updatedTable.sectionId,
+      seats: updatedTable.seats,
       hasOrders: !!currentOrder,
       orders: currentOrder ? currentOrder.items : [],
       createdAt: updatedTable.createdAt,
@@ -176,6 +176,7 @@ exports.updateTable = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Delete a table and its orders
 exports.deleteTable = async (req, res) => {
