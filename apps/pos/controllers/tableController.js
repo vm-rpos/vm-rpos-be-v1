@@ -1,5 +1,6 @@
 const Table = require('../models/Table');
 const Order = require('../models/Order');
+const Section = require('../models/Section');
 
 // Get all tables with their order information
 // exports.getAllTables = async (req, res) => {
@@ -34,15 +35,12 @@ const Order = require('../models/Order');
 //Fetching based on User's RestaurantId
 exports.getAllTables = async (req, res) => {
   try {
-    const { restaurantId } = req.query;
-    if (!restaurantId) {
-      return res.status(400).json({ message: "Restaurant ID is required" });
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // Fetch tables that belong to the restaurant
-    const tables = await Table.find({ restaurantId }).sort({ tableNumber: 1 });
+    const tables = await Table.find({ restaurantId: req.user.restaurantId }).sort({ tableNumber: 1 });
 
-    // Get latest order for each table to check for pending orders
     const tablesWithOrderInfo = await Promise.all(
       tables.map(async (table) => {
         const latestOrder = await Order.findOne({
@@ -55,7 +53,8 @@ exports.getAllTables = async (req, res) => {
           name: table.name,
           tableNumber: table.tableNumber,
           hasOrders: !!latestOrder,
-          restaurantId: table.restaurantId, // Ensure restaurantId is included
+          sectionId: table.sectionId,
+          restaurantId: table.restaurantId,
           createdAt: table.createdAt,
           updatedAt: table.updatedAt,
         };
@@ -72,63 +71,87 @@ exports.getAllTables = async (req, res) => {
 // Create a new table
 exports.createTable = async (req, res) => {
   try {
-    const { name, tableNumber } = req.body;
+    const { name, tableNumber, sectionId } = req.body;
 
-    if (!name || !tableNumber) {
-      return res.status(400).json({ message: "Table name and number are required" });
+    // Validate input
+    if (!name || !tableNumber || !sectionId) {
+      return res.status(400).json({ message: "Table name, number, and sectionId are required" });
     }
 
-    // ✅ Ensure the authenticated user has a restaurantId
-    if (!req.user || !req.user.restaurantId) {
+    if (isNaN(tableNumber)) {
+      return res.status(400).json({ message: "Table number must be a number" });
+    }
+
+    if (!req.user?.restaurantId) {
       return res.status(403).json({ message: "User does not have a valid restaurantId" });
     }
 
-    // ✅ Check if the table number already exists for the restaurant
-    const existingTable = await Table.findOne({ tableNumber, restaurantId: req.user.restaurantId });
+    // Check if section exists
+    const sectionExists = await Section.findById(sectionId);
+    if (!sectionExists) {
+      return res.status(400).json({ message: "Section does not exist" });
+    }
+
+    // Check for duplicate table number
+    const existingTable = await Table.findOne({ 
+      tableNumber: parseInt(tableNumber), 
+      restaurantId: req.user.restaurantId 
+    });
     if (existingTable) {
       return res.status(400).json({ message: "Table number already exists for this restaurant" });
     }
 
-    // ✅ Assign restaurantId from logged-in user
+    // Create new table
     const newTable = new Table({
       name,
       tableNumber: parseInt(tableNumber),
       hasOrders: false,
-      restaurantId: req.user.restaurantId
+      restaurantId: req.user.restaurantId,
+      sectionId
     });
 
     const savedTable = await newTable.save();
-    res.status(201).json(savedTable);
+    
+    res.status(201).json({
+      success: true,
+      data: savedTable,
+      message: "Table created successfully"
+    });
   } catch (err) {
     console.error("Error creating table:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ 
+      success: false,
+      message: "Server error",
+      error: err.message 
+    });
   }
 };
 
 // Update a table
 exports.updateTable = async (req, res) => {
   try {
-    const { name, tableNumber } = req.body;
+    const { name, tableNumber, sectionId } = req.body;
 
-    if (!name && !tableNumber) {
-      return res.status(400).json({ message: 'At least name or table number must be provided' });
+    if (!name && !tableNumber && !sectionId) {
+      return res.status(400).json({ message: 'At least one field must be provided' });
     }
 
     const updateData = {};
     if (name) updateData.name = name;
     if (tableNumber) {
-      // Check if another table already has this number
-      const existingTable = await Table.findOne({ 
-        tableNumber, 
-        _id: { $ne: req.params.id } // Exclude the current table
+      const existingTable = await Table.findOne({
+        tableNumber,
+        _id: { $ne: req.params.id }
       });
-      
+
       if (existingTable) {
         return res.status(400).json({ message: 'Table number already exists' });
       }
-      
+
       updateData.tableNumber = tableNumber;
     }
+
+    if (sectionId) updateData.sectionId = sectionId;
 
     const updatedTable = await Table.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedTable) return res.status(404).json({ message: 'Table not found' });
@@ -142,6 +165,7 @@ exports.updateTable = async (req, res) => {
       _id: updatedTable._id,
       name: updatedTable.name,
       tableNumber: updatedTable.tableNumber,
+      sectionId: updatedTable.sectionId,
       hasOrders: !!currentOrder,
       orders: currentOrder ? currentOrder.items : [],
       createdAt: updatedTable.createdAt,
@@ -152,6 +176,7 @@ exports.updateTable = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Delete a table and its orders
 exports.deleteTable = async (req, res) => {
@@ -174,16 +199,16 @@ exports.placeOrder = async (req, res) => {
     const { orders, waiterId, restaurantId } = req.body;
     console.log("Order request body:", req.body);
 
-    // Ensure orders exist and are valid
+    // Validate orders
     if (!orders || !Array.isArray(orders) || orders.length === 0) {
       return res.status(400).json({ message: "Orders must be a non-empty array" });
     }
 
-    // Find the table
+    // Find the table (which includes sectionId)
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ message: "Table not found" });
 
-    // Ensure restaurantId is present (either from request or from the table)
+    // Ensure restaurantId is present (either from request or table)
     const finalRestaurantId = restaurantId || table.restaurantId;
     if (!finalRestaurantId) {
       return res.status(400).json({ message: "restaurantId is required" });
@@ -217,6 +242,7 @@ exports.placeOrder = async (req, res) => {
       existingOrder.items = validatedItems;
       existingOrder.total = total;
       existingOrder.restaurantId = finalRestaurantId;
+      existingOrder.sectionId = table.sectionId; // <-- Include sectionId
 
       if (waiterId) {
         existingOrder.waiterId = waiterId;
@@ -224,10 +250,11 @@ exports.placeOrder = async (req, res) => {
 
       await existingOrder.save();
     } else {
-      // Create new order
+      // Create new order (include sectionId)
       const orderData = {
         restaurantId: finalRestaurantId,
         tableId: table._id,
+        sectionId: table.sectionId, // <-- Include sectionId
         items: validatedItems,
         total,
         status: "pending",
@@ -256,6 +283,7 @@ exports.placeOrder = async (req, res) => {
       tableNumber: table.tableNumber,
       hasOrders: true,
       restaurantId: finalRestaurantId,
+      sectionId: table.sectionId, // <-- Return sectionId in response
       orders: existingOrder.items,
       waiter: existingOrder.waiterId
         ? {

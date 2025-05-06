@@ -38,6 +38,11 @@ const OrderSchema = new mongoose.Schema({
     ref: 'Table',
     required: true
   },
+    sectionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Section',
+        required: true
+      },
   waiterId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Waiter',
