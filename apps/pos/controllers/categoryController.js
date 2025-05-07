@@ -23,47 +23,43 @@ const mongoose = require('mongoose');
 //Get based on RestaurantId
 exports.getAllCategories = async (req, res) => {
   try {
-    const { restaurantId } = req.query;
-    
+    const restaurantId = req.user?.restaurantId;
+
     if (!restaurantId) {
-      return res.status(400).json({ message: "Restaurant ID is required" });
+      return res.status(400).json({ message: "Restaurant ID not found in token" });
     }
 
-    // Check if restaurantId is a valid ObjectId
+    // Validate restaurantId
     if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({ message: "Invalid restaurant ID format" });
     }
-    
-    // Convert string ID to ObjectId
+
     const objectId = new mongoose.Types.ObjectId(restaurantId);
-    
-    // Find categories for this restaurant
-    const categories = await Category.find({ 
-      restaurantId: objectId 
-    }).sort({ name: 1 });
-    
-    // Get items for each category
+
+    const categories = await Category.find({ restaurantId: objectId }).sort({ name: 1 });
+
     const categoriesWithItems = await Promise.all(
       categories.map(async (category) => {
-        const items = await Item.find({ 
+        const items = await Item.find({
           categoryId: category._id,
-          restaurantId: objectId // Also filter items by restaurantId for extra security
+          restaurantId: objectId,
         }).populate('tags');
-        
-        return { 
-          _id: category._id, 
-          name: category.name, 
-          items 
+
+        return {
+          _id: category._id,
+          name: category.name,
+          items,
         };
       })
     );
-    
+
     res.json(categoriesWithItems);
   } catch (err) {
     console.error('Error getting categories:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+
 
 // Create a new category
 exports.createCategory = async (req, res) => {
@@ -142,9 +138,25 @@ exports.updateCategory = async (req, res) => {
 // Delete a category and all its items
 exports.deleteCategory = async (req, res) => {
   try {
-    const deletedCategory = await Category.findByIdAndDelete(req.params.id);
-    if (!deletedCategory) return res.status(404).json({ message: 'Category not found' });
+    const userRestaurantId = req.user?.restaurantId;
 
+    if (!userRestaurantId) {
+      return res.status(403).json({ message: 'Unauthorized: No restaurant linked to user' });
+    }
+
+    const category = await Category.findById(req.params.id);
+
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    // Check if category belongs to the user's restaurant
+    if (category.restaurantId.toString() !== userRestaurantId.toString()) {
+      return res.status(403).json({ message: 'Unauthorized: Cannot delete category from another restaurant' });
+    }
+
+    // Delete the category and related items
+    await Category.findByIdAndDelete(req.params.id);
     await Item.deleteMany({ categoryId: req.params.id });
 
     res.json({ message: 'Category and all its items deleted successfully' });
@@ -153,6 +165,7 @@ exports.deleteCategory = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Add item to category with tag and sectionData handling
 exports.addItemToCategory = async (req, res) => {

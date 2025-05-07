@@ -35,11 +35,13 @@ const Section = require('../models/Section');
 //Fetching based on User's RestaurantId
 exports.getAllTables = async (req, res) => {
   try {
-    if (!req.user || !req.user.restaurantId) {
-      return res.status(403).json({ message: "Unauthorized" });
+    const restaurantId = req.user?.restaurantId;
+
+    if (!restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: Restaurant ID missing in token" });
     }
 
-    const tables = await Table.find({ restaurantId: req.user.restaurantId }).sort({ tableNumber: 1 });
+    const tables = await Table.find({ restaurantId }).sort({ tableNumber: 1 });
 
     const tablesWithOrderInfo = await Promise.all(
       tables.map(async (table) => {
@@ -65,9 +67,10 @@ exports.getAllTables = async (req, res) => {
     res.json(tablesWithOrderInfo);
   } catch (err) {
     console.error("Error getting tables:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // Create a new table
 exports.createTable = async (req, res) => {
