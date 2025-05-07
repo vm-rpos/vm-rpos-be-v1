@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const ms = require("ms");
 
 // Use separate secrets for different token types
 const ACCESS_TOKEN_SECRET = "Kedhareswarmatha";
@@ -90,7 +91,6 @@ exports.signup = async (req, res) => {
   }
 };
 
-// User Login with password
 // User Login with token management
 exports.login = async (req, res) => {
   try {
@@ -130,6 +130,7 @@ exports.login = async (req, res) => {
       accessToken,
       refreshToken,
       requirePin: true,
+      expireAt: new Date(Date.now() + ms(REFRESH_TOKEN_EXPIRY)),
       user: {
         _id: user._id,
         email: user.email,
