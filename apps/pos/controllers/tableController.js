@@ -1,6 +1,7 @@
 const Table = require('../models/Table');
 const Order = require('../models/Order');
 const Section = require('../models/Section');
+const waiter = require('../models/Waiter');
 
 // Get all tables with their order information
 // exports.getAllTables = async (req, res) => {
@@ -71,6 +72,53 @@ exports.getAllTables = async (req, res) => {
   }
 };
 
+exports.getTablesBySection = async (req, res) => {
+  try {
+    const restaurantId = req.params.restaurantId;
+
+    // Get all sections for the restaurant
+    const sections = await Section.find({ restaurantId }).select('section').lean();;
+
+    const responseData = [];
+
+    for (const section of sections) {
+      const tables = await Table.find({ restaurantId, sectionId: section._id })
+      .populate({ path: 'waiterId', select: 'name', strictPopulate: false })
+        .lean();
+
+      const tableData = [];
+
+      for (const table of tables) {
+        const latestOrder = await Order.findOne({ tableId: table._id })
+          .sort({ createdAt: -1 }) // get latest order if multiple
+          .lean();
+
+        const totalItems = latestOrder?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+        tableData.push({
+          tableNumber: table.tableNumber,
+          tableName: table.name,
+          waiter: table.waiterId?.name || null,
+          seats: table.seats,
+          billingPrice: latestOrder?.total || 0,
+          orderTime: latestOrder?.createdAt || null,
+          totalItems,
+        });
+      }
+
+      responseData.push({
+        sectionName: section.section,
+        sectionId: section._id,
+        tables: tableData,
+      });
+    }
+
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error("Error fetching table-section data:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 // Create a new table
 exports.createTable = async (req, res) => {
