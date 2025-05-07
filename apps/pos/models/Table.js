@@ -8,8 +8,7 @@ const TableSchema = new mongoose.Schema({
   },
   tableNumber: {
     type: Number,
-    required: true,
-    unique: true
+    required: true
   },
   seats: {
     type: Number,

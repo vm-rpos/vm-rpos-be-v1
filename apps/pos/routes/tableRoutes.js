@@ -12,5 +12,6 @@ router.put('/:id', tableController.updateTable);
 router.delete('/:id', tableController.deleteTable);
 router.post('/:id/orders',tableController.placeOrder);
 router.delete('/:id/orders', tableController.clearOrders);
+router.delete('/orders/:orderId', tableController.deleteOrderById);
 
 module.exports = router;

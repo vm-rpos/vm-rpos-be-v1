@@ -225,7 +225,6 @@ exports.addItemToCategory = async (req, res) => {
   }
 };
 
-
 // Update item in category with tag and sectionData handling
 exports.updateItemInCategory = async (req, res) => {
   try {

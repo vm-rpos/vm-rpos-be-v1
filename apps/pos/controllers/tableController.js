@@ -55,6 +55,7 @@ exports.getAllTables = async (req, res) => {
           hasOrders: !!latestOrder,
           sectionId: table.sectionId,
           restaurantId: table.restaurantId,
+          seats: table.seats,
           createdAt: table.createdAt,
           updatedAt: table.updatedAt,
         };
@@ -301,6 +302,38 @@ exports.placeOrder = async (req, res) => {
   }
 };
 
+// Delete an order by ID
+exports.deleteOrderById = async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+
+    // Find the order to delete
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Delete the order
+    await order.deleteOne();
+
+    // Check if the table still has other pending orders
+    const pendingOrders = await Order.find({
+      tableId: order.tableId,
+      status: 'pending',
+    });
+
+    // If no more pending orders, set hasOrders to false
+    if (pendingOrders.length === 0) {
+      await Table.findByIdAndUpdate(order.tableId, { hasOrders: false });
+    }
+
+    res.json({ message: "Order deleted successfully", orderId });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // Modified getTableById to include waiter info
 exports.getTableById = async (req, res) => {
   try {
@@ -327,6 +360,7 @@ exports.getTableById = async (req, res) => {
       tableNumber: table.tableNumber,
       hasOrders: !!currentOrder,
       orders: currentOrder ? currentOrder.items : [],
+      seats: table.seats,
       waiter: waiterInfo,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt
@@ -337,7 +371,7 @@ exports.getTableById = async (req, res) => {
   }
 };
 
-// Clear orders for a table
+// Clear orders for a table removes the pending status from all orders associated with the table
 exports.clearOrders = async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
