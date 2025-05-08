@@ -26,7 +26,7 @@ exports.getRestaurantById = async (req, res) => {
 // Create a new restaurant
 exports.createRestaurant = async (req, res) => {
   try {
-    const newRestaurant = new Restaurant(req.body);
+    const newRestaurant = new Restaurant({...req.body, qrImage: req.body.qrImage || "",});
     await newRestaurant.save();
     res.status(201).json(newRestaurant);
   } catch (err) {
@@ -69,7 +69,7 @@ exports.getRestaurantName =  async(req,res)=>{
     if (!restaurant) {
       return res.status(404).json({ message: "Restaurant not found" });
     }
-    res.json({ name: restaurant.name });
+    res.json({ name: restaurant.name, qrImage: restaurant.qrImage });
   } catch (error) {
     res.status(500).json({ message: "Error fetching restaurant data" });
   }
