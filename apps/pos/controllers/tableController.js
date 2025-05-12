@@ -2,6 +2,7 @@ const Table = require('../models/Table');
 const Order = require('../models/Order');
 const Section = require('../models/Section');
 const waiter = require('../models/Waiter');
+const Restaurant = require('../models/Restaurant'); // Assuming you have a Restaurant model 
 
 // Get all tables with their order information
 // exports.getAllTables = async (req, res) => {
@@ -229,7 +230,6 @@ exports.updateTable = async (req, res) => {
   }
 };
 
-
 // Delete a table and its orders
 exports.deleteTable = async (req, res) => {
   try {
@@ -248,33 +248,29 @@ exports.deleteTable = async (req, res) => {
 // Place an order for a table
 exports.placeOrder = async (req, res) => {
   try {
-    const { orders, waiterId, restaurantId } = req.body;
+    const { orders, waiterId, restaurantId, paymentMethod } = req.body;
     console.log("Order request body:", req.body);
 
-    // Validate orders
     if (!orders || !Array.isArray(orders) || orders.length === 0) {
       return res.status(400).json({ message: "Orders must be a non-empty array" });
     }
 
-    // Find the table (which includes sectionId)
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ message: "Table not found" });
 
-    // Ensure restaurantId is present (either from request or table)
     const finalRestaurantId = restaurantId || table.restaurantId;
     if (!finalRestaurantId) {
       return res.status(400).json({ message: "restaurantId is required" });
     }
 
-    // Validate waiter ID if provided
+    let waiter = null;
     if (waiterId) {
-      const waiter = await require("../models/Waiter").findById(waiterId);
+      waiter = await require("../models/Waiter").findById(waiterId);
       if (!waiter) {
         return res.status(404).json({ message: "Waiter not found" });
       }
     }
 
-    // Validate order items
     const validatedItems = orders.map((item) => ({
       name: item.name,
       price: Number(item.price),
@@ -283,48 +279,111 @@ exports.placeOrder = async (req, res) => {
       itemId: item.itemId || null,
     }));
 
-    // Calculate total order amount
     const total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-    // Find an existing order for the table (pending status)
-    let existingOrder = await Order.findOne({ tableId: table._id, status: "pending" });
+    let existingOrder = await Order.findOne({
+      tableId: table._id,
+      status: "pending",
+      billNumber: { $ne: null } // Only reuse if it has a valid billNumber
+    });
+
+    let billNumber;
 
     if (existingOrder) {
       // Update existing order
       existingOrder.items = validatedItems;
       existingOrder.total = total;
       existingOrder.restaurantId = finalRestaurantId;
-      existingOrder.sectionId = table.sectionId; // <-- Include sectionId
+      existingOrder.sectionId = table.sectionId;
+      existingOrder.paymentMethod = paymentMethod || existingOrder.paymentMethod;
 
-      if (waiterId) {
+      if (waiterId && waiter) {
         existingOrder.waiterId = waiterId;
+        existingOrder.waiter = waiter.name;
       }
 
       await existingOrder.save();
+      billNumber = existingOrder.billNumber;
     } else {
-      // Create new order (include sectionId)
+      // Generate new bill number
+      const restaurant = await Restaurant.findById(finalRestaurantId);
+      if (!restaurant) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
+      const now = new Date();
+      const istOffset = 330 * 60 * 1000;
+      const istTime = new Date(now.getTime() + istOffset);
+      const currentYear = istTime.getUTCFullYear();
+      const currentMonth = istTime.getUTCMonth() + 1;
+      const currentDate = istTime.getUTCDate();
+
+      const billTracking = restaurant.billTracking || {
+        currentYear,
+        currentMonth,
+        currentDate,
+        dailyOrderCounter: 0,
+      };
+
+      if (
+        billTracking.currentYear !== currentYear ||
+        billTracking.currentMonth !== currentMonth ||
+        billTracking.currentDate !== currentDate
+      ) {
+        billTracking.dailyOrderCounter = 0;
+        billTracking.currentYear = currentYear;
+        billTracking.currentMonth = currentMonth;
+        billTracking.currentDate = currentDate;
+      }
+
+      billTracking.dailyOrderCounter++;
+
+      billNumber = `${String(currentYear).slice(-2)}${String(currentMonth).padStart(2, "0")}${String(currentDate).padStart(2, "0")}${String(billTracking.dailyOrderCounter).padStart(4, "0")}`;
+
+      restaurant.billTracking = billTracking;
+      await restaurant.save();
+
       const orderData = {
         restaurantId: finalRestaurantId,
         tableId: table._id,
-        sectionId: table.sectionId, // <-- Include sectionId
+        sectionId: table.sectionId,
         items: validatedItems,
         total,
         status: "pending",
+        billNumber,
+        paymentMethod,
       };
 
-      if (waiterId) {
+      if (waiterId && waiter) {
         orderData.waiterId = waiterId;
+        orderData.waiter = waiter.name;
       }
 
       existingOrder = new Order(orderData);
       await existingOrder.save();
     }
 
-    // Update table status
+    // Update table info
     table.hasOrders = true;
+    table.currentOrderItems = validatedItems;
+    table.currentBillAmount = total;
+    table.paymentMethod = paymentMethod;
+    table.billNumber = billNumber;
+
+    if (!table.firstOrderTime) {
+      table.firstOrderTime = new Date();
+    }
+
+    if (waiterId && waiter) {
+      table.waiter = {
+        waiterId: waiter._id,
+        name: waiter.name,
+        phoneNumber: waiter.phoneNumber,
+      };
+    }
+
     await table.save();
 
-    // Populate waiter info if available
     if (existingOrder.waiterId) {
       await existingOrder.populate("waiterId");
     }
@@ -335,8 +394,9 @@ exports.placeOrder = async (req, res) => {
       tableNumber: table.tableNumber,
       hasOrders: true,
       restaurantId: finalRestaurantId,
-      sectionId: table.sectionId, // <-- Return sectionId in response
+      sectionId: table.sectionId,
       orders: existingOrder.items,
+      billNumber: billNumber,
       waiter: existingOrder.waiterId
         ? {
             _id: existingOrder.waiterId._id,
@@ -344,6 +404,7 @@ exports.placeOrder = async (req, res) => {
             phoneNumber: existingOrder.waiterId.phoneNumber,
           }
         : null,
+      paymentMethod: existingOrder.paymentMethod,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt,
     });
@@ -351,7 +412,8 @@ exports.placeOrder = async (req, res) => {
     console.error("Error placing order:", err);
     res.status(500).json({ message: "Server error" });
   }
-};
+}
+
 
 // Delete an order by ID
 exports.deleteOrderById = async (req, res) => {

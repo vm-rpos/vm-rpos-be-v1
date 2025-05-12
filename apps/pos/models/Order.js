@@ -33,6 +33,12 @@ const OrderSchema = new mongoose.Schema({
     ref: 'Restaurant',
     required: true // Ensure every order belongs to a restaurant
   },
+  billNumber: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true
+  },
   tableId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Table',
