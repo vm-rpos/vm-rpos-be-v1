@@ -82,7 +82,7 @@ exports.getAllTables = async (req, res) => {
 
 exports.getTablesBySection = async (req, res) => {
   try {
-    const restaurantId = req.params.restaurantId;
+    const restaurantId = req.user.restaurantId;
 
     // Get all sections for the restaurant
     const sections = await Section.find({ restaurantId }).select('section').lean();;
@@ -101,17 +101,19 @@ exports.getTablesBySection = async (req, res) => {
           .sort({ createdAt: -1 }) // get latest order if multiple
           .lean();
 
-        const totalItems = latestOrder?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
-
-        tableData.push({
-          tableNumber: table.tableNumber,
-          tableName: table.name,
-          waiter: table.waiterId?.name || null,
-          seats: table.seats,
-          billingPrice: latestOrder?.total || 0,
-          orderTime: latestOrder?.createdAt || null,
-          totalItems,
-        });
+          const hasOrders = !!latestOrder;
+          const totalItems = latestOrder?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
+          
+          tableData.push({
+            tableNumber: table.tableNumber,
+            tableName: table.name,
+            waiter: table.waiterId?.name || null,
+            seats: table.seats,
+            billingPrice: latestOrder?.total || 0,
+            orderTime: latestOrder?.createdAt || null,
+            totalItems,
+            hasOrders,
+          });          
       }
 
       responseData.push({
@@ -374,8 +376,6 @@ exports.placeOrder = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
 
 // Delete an order by ID
 exports.deleteOrderById = async (req, res) => {

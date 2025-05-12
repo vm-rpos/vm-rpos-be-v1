@@ -7,6 +7,7 @@ router.use(protect); // Protect all routes in this file
 
 router.post('/', sectionController.createSection);
 router.get('/', sectionController.getAllSections);
+router.get('/sectionsWithTables', sectionController.getSectionsWithTables);
 router.get('/:id', sectionController.getSectionById);
 router.put('/:id', sectionController.updateSection);
 router.delete('/:id', sectionController.deleteSection);
