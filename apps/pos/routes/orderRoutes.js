@@ -9,6 +9,7 @@ router.use(protect); // Protect all routes in this file
 // Order routes
 router.get('/', orderController.getAllOrders);
 router.get('/orderMetrics', orderController.getOrderMetrics);
+router.get('/toptenOrders', orderController.getTopTenOrders);
 
 
 module.exports = router;

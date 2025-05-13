@@ -8,7 +8,8 @@ const analyticsController = {
   getAnalyticsData: async (req, res) => {
     try {
       // Get restaurantId from query parameters
-      const { restaurantId, timeRange = "all" } = req.query;
+      const restaurantId = req.user?.restaurantId;
+      const { timeRange = "all" } = req.query;
       
       if (!restaurantId) {
         return res.status(400).json({ message: "Restaurant ID is required" });
@@ -302,7 +303,6 @@ const analyticsController = {
         sortedOrders: ordersWithTableInfo,
         waitersData, // Added waiter performance data
         timeRange: timeRange,
-        restaurantId: restaurantId, // Include the restaurant ID in the response
       });
     } catch (err) {
       console.error("Error generating analytics:", err);
