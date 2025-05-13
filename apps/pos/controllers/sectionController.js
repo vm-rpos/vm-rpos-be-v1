@@ -36,9 +36,7 @@ exports.getSectionsWithTables = async (req, res) => {
   
       for (const section of sections) {
         // Get all tables for this section
-        const tables = await Table.find({ sectionId: section._id, restaurantId })
-          .populate({ path: 'waiterId', select: 'name', strictPopulate: false })
-          .lean();
+        const tables = await Table.find({ sectionId: section._id, restaurantId }).lean();
   
         const tableData = [];
   
@@ -52,12 +50,13 @@ exports.getSectionsWithTables = async (req, res) => {
           const totalItems = latestOrder?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
   
           tableData.push({
+            tableId: table._id,
             tableNumber: table.tableNumber,
             tableName: table.name,
-            waiter: table.waiterId?.name || null,
+            waiter: table.waiter || null, // Returns the whole waiter object: { waiterId, name, phoneNumber }
             seats: table.seats,
-            billingPrice: latestOrder?.total || 0,
-            orderTime: latestOrder?.createdAt || null,
+            billingPrice: latestOrder?.total || table.currentBillAmount || 0,
+            orderTime: latestOrder?.createdAt || table.firstOrderTime || null,
             totalItems,
             hasOrders,
           });
@@ -76,6 +75,7 @@ exports.getSectionsWithTables = async (req, res) => {
       res.status(500).json({ message: "Server error", error: err.message });
     }
   };
+  
 
   
 // Create a new section
