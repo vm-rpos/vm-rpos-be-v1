@@ -58,6 +58,10 @@ const OrderSchema = new mongoose.Schema({
     type: String, // This will store the name of the waiter
     required: false
   },
+  paymentMethod: {
+    type: String,
+    required: false,
+  },
   items: [OrderItemSchema],
   total: {
     type: Number,
