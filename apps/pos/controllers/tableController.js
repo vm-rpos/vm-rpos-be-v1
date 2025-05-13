@@ -206,13 +206,13 @@ exports.deleteTable = async (req, res) => {
 // Place an order for a table
 exports.placeOrder = async (req, res) => {
   try {
-    const { orders, waiterId, paymentMethod } = req.body;
+    const { orders, waiterId } = req.body;
     const restaurantId = req.user.restaurantId;
     const tableId = req.params.id;
 
-    if (!orders || !Array.isArray(orders) || orders.length === 0) {
-      return res.status(400).json({ message: "Orders must be a non-empty array" });
-    }
+    // if (!orders || !Array.isArray(orders) || orders.length === 0) {
+    //   return res.status(400).json({ message: "Orders must be a non-empty array" });
+    // }
 
     const table = await Table.findById(tableId);
     if (!table) return res.status(404).json({ message: "Table not found" });
@@ -225,15 +225,64 @@ exports.placeOrder = async (req, res) => {
       itemId: item.itemId || null
     }));
 
-    const total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const additionalTotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+    let waiter = null;
+    if (waiterId) {
+      waiter = await require("../models/Waiter").findById(waiterId);
+      if (!waiter) return res.status(404).json({ message: "Waiter not found" });
+    }
+
+    const existingOrder = await Order.findOne({ tableId, status: "pending" });
+
+    if (existingOrder) {
+      // Update items with new ones
+      existingOrder.items = validatedItems;
+      existingOrder.total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      
+      // Optionally update waiter if changed
+      if (waiter) {
+        existingOrder.waiterId = waiter._id;
+        existingOrder.waiter = waiter.name;
+      }
+    
+      await existingOrder.save();
+    
+      // Update table as well
+      table.currentOrderItems = validatedItems;
+      table.currentBillAmount = existingOrder.total;
+      if (waiter) table.waiterId = waiter._id;
+      await table.save();
+    
+      return res.json({
+        _id: table._id,
+        name: table.name,
+        tableNumber: table.tableNumber,
+        hasOrders: true,
+        restaurantId,
+        sectionId: table.sectionId,
+        currentOrderItems: validatedItems,
+        currentBillAmount: existingOrder.total,
+        billNumber: existingOrder.billNumber,
+        waiter: waiter ? {
+          _id: waiter._id,
+          name: waiter.name,
+          phoneNumber: waiter.phoneNumber
+        } : null,
+        createdAt: table.createdAt,
+        updatedAt: table.updatedAt,
+        firstOrderTime: table.firstOrderTime
+      });
+    }
+    
+
+    // 🆕 No existing pending order — create a new one
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
 
     const now = new Date();
     const istOffset = 330 * 60 * 1000;
     const ist = new Date(now.getTime() + istOffset);
-
     const [year, month, date] = [ist.getUTCFullYear(), ist.getUTCMonth() + 1, ist.getUTCDate()];
 
     restaurant.billTracking = restaurant.billTracking || {
@@ -248,28 +297,26 @@ exports.placeOrder = async (req, res) => {
       restaurant.billTracking.currentMonth !== month ||
       restaurant.billTracking.currentDate !== date
     ) {
-      restaurant.billTracking = { currentYear: year, currentMonth: month, currentDate: date, dailyOrderCounter: 0 };
+      restaurant.billTracking = {
+        currentYear: year,
+        currentMonth: month,
+        currentDate: date,
+        dailyOrderCounter: 0
+      };
     }
 
     restaurant.billTracking.dailyOrderCounter++;
     const billNumber = `${String(year).slice(-2)}${String(month).padStart(2, "0")}${String(date).padStart(2, "0")}${String(restaurant.billTracking.dailyOrderCounter).padStart(4, "0")}`;
     await restaurant.save();
 
-    let waiter = null;
-    if (waiterId) {
-      waiter = await require("../models/Waiter").findById(waiterId);
-      if (!waiter) return res.status(404).json({ message: "Waiter not found" });
-    }
-
     const orderData = {
       restaurantId,
       tableId,
       sectionId: table.sectionId,
       items: validatedItems,
-      total,
+      total: additionalTotal,
       status: "pending",
-      billNumber,
-      paymentMethod
+      billNumber
     };
 
     if (waiter) {
@@ -282,14 +329,9 @@ exports.placeOrder = async (req, res) => {
 
     table.hasOrders = true;
     table.currentOrderItems = validatedItems;
-    table.currentBillAmount = total;
-    table.paymentMethod = paymentMethod;
+    table.currentBillAmount = additionalTotal;
     table.billNumber = billNumber;
-
-    if (!table.firstOrderTime) {
-      table.firstOrderTime = new Date();
-    }
-
+    table.firstOrderTime = new Date();
     if (waiter) {
       table.waiterId = waiter._id;
     }
@@ -304,14 +346,13 @@ exports.placeOrder = async (req, res) => {
       restaurantId,
       sectionId: table.sectionId,
       currentOrderItems: validatedItems,
-      currentBillAmount: total,
+      currentBillAmount: additionalTotal,
       billNumber,
       waiter: waiter ? {
         _id: waiter._id,
         name: waiter.name,
         phoneNumber: waiter.phoneNumber
       } : null,
-      paymentMethod,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt,
       firstOrderTime: table.firstOrderTime
@@ -321,6 +362,7 @@ exports.placeOrder = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Delete an order by ID
 exports.deleteOrderById = async (req, res) => {
@@ -397,17 +439,36 @@ exports.clearOrders = async (req, res) => {
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ message: 'Table not found' });
 
-    await Order.updateMany({ tableId: table._id, status: 'pending' }, { status: 'completed' });
+    const { paymentMethod } = req.body;
+    if (!paymentMethod) {
+      return res.status(400).json({ message: 'Payment method is required' });
+    }
 
+    // Update all pending orders: mark as completed and set payment method
+    await Order.updateMany(
+      { tableId: table._id, status: 'pending' },
+      { status: 'completed', paymentMethod }
+    );
+
+    // Clear order-related fields on the table
     table.hasOrders = false;
+    table.currentOrderItems = [];
+    table.currentBillAmount = 0;
+    table.paymentMethod = null; // reset on table
+    table.billNumber = null;
+    table.firstOrderTime = null;
+    table.waiterId = null;
+
     await table.save();
 
+    // Respond with updated info, including the payment method used
     res.json({
       _id: table._id,
       name: table.name,
       tableNumber: table.tableNumber,
       hasOrders: false,
       orders: [],
+      paymentMethod, // Include in response
       createdAt: table.createdAt,
       updatedAt: table.updatedAt
     });
