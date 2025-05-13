@@ -214,8 +214,12 @@ exports.placeOrder = async (req, res) => {
     //   return res.status(400).json({ message: "Orders must be a non-empty array" });
     // }
 
+
     const table = await Table.findById(tableId);
     if (!table) return res.status(404).json({ message: "Table not found" });
+
+    const section = await Section.findById(table.sectionId);
+if (!section) return res.status(404).json({ message: "Section not found" });
 
     const validatedItems = orders.map(item => ({
       name: item.name,
@@ -239,7 +243,8 @@ exports.placeOrder = async (req, res) => {
       // Update items with new ones
       existingOrder.items = validatedItems;
       existingOrder.total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      
+      existingOrder.sectionName = section.section; // ✅ Add this
+
       // Optionally update waiter if changed
       if (waiter) {
         existingOrder.waiterId = waiter._id;
@@ -313,6 +318,7 @@ exports.placeOrder = async (req, res) => {
       restaurantId,
       tableId,
       sectionId: table.sectionId,
+      sectionName: section.section,
       items: validatedItems,
       total: additionalTotal,
       status: "pending",
