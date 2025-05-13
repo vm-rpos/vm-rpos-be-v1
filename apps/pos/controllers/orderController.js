@@ -174,6 +174,7 @@ exports.getAllOrders = async (req, res) => {
       tableId: order.table?._id,
       tableNumber: order.table?.tableNumber || "N/A",
       tableName: order.table?.name || "Unknown",
+      section: order.sectionName || "Unknown",
       waiter: order.waiter,
       items: order.items,
       total: order.total,
@@ -209,7 +210,7 @@ exports.getAllOrders = async (req, res) => {
 exports.getOrderMetrics = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
-    
+
     const {timeRange = "all", startDateTime, endDateTime, customStartDate, customEndDate } = req.query;
 
     if (!restaurantId) {
