@@ -53,15 +53,12 @@ const OrderSchema = new mongoose.Schema({
       { 
         type: String 
       },
-  waiterId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Waiter',
-    required: false
-  },
-  waiter: {
-    type: String, // This will store the name of the waiter
-    required: false
-  },
+      waiter: {
+        _id: mongoose.Schema.Types.ObjectId,
+        name: String,
+        phoneNumber: String,
+        age: Number
+      },
   paymentMethod: {
     type: String,
     required: false,

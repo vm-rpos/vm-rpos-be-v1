@@ -210,16 +210,11 @@ exports.placeOrder = async (req, res) => {
     const restaurantId = req.user.restaurantId;
     const tableId = req.params.id;
 
-    // if (!orders || !Array.isArray(orders) || orders.length === 0) {
-    //   return res.status(400).json({ message: "Orders must be a non-empty array" });
-    // }
-
-
     const table = await Table.findById(tableId);
     if (!table) return res.status(404).json({ message: "Table not found" });
 
     const section = await Section.findById(table.sectionId);
-if (!section) return res.status(404).json({ message: "Section not found" });
+    if (!section) return res.status(404).json({ message: "Section not found" });
 
     const validatedItems = orders.map(item => ({
       name: item.name,
@@ -240,25 +235,34 @@ if (!section) return res.status(404).json({ message: "Section not found" });
     const existingOrder = await Order.findOne({ tableId, status: "pending" });
 
     if (existingOrder) {
-      // Update items with new ones
       existingOrder.items = validatedItems;
-      existingOrder.total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      existingOrder.sectionName = section.section; // ✅ Add this
+      existingOrder.total = additionalTotal;
+      existingOrder.sectionName = section.section;
 
-      // Optionally update waiter if changed
       if (waiter) {
-        existingOrder.waiterId = waiter._id;
-        existingOrder.waiter = waiter.name;
+        existingOrder.waiter = {
+          _id: waiter._id,
+          name: waiter.name,
+          phoneNumber: waiter.phoneNumber,
+          age: waiter.age
+        };
       }
-    
+
       await existingOrder.save();
-    
-      // Update table as well
+
       table.currentOrderItems = validatedItems;
-      table.currentBillAmount = existingOrder.total;
-      if (waiter) table.waiterId = waiter._id;
+      table.currentBillAmount = additionalTotal;
+      if (waiter) {
+        table.waiter = {
+          _id: waiter._id,
+          name: waiter.name,
+          phoneNumber: waiter.phoneNumber,
+          age: waiter.age
+        };
+      }
+
       await table.save();
-    
+
       return res.json({
         _id: table._id,
         name: table.name,
@@ -267,21 +271,16 @@ if (!section) return res.status(404).json({ message: "Section not found" });
         restaurantId,
         sectionId: table.sectionId,
         currentOrderItems: validatedItems,
-        currentBillAmount: existingOrder.total,
+        currentBillAmount: additionalTotal,
         billNumber: existingOrder.billNumber,
-        waiter: waiter ? {
-          _id: waiter._id,
-          name: waiter.name,
-          phoneNumber: waiter.phoneNumber
-        } : null,
+        waiter: table.waiter || null,
         createdAt: table.createdAt,
         updatedAt: table.updatedAt,
         firstOrderTime: table.firstOrderTime
       });
     }
-    
 
-    // 🆕 No existing pending order — create a new one
+    // No existing pending order – create new one
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
 
@@ -326,8 +325,12 @@ if (!section) return res.status(404).json({ message: "Section not found" });
     };
 
     if (waiter) {
-      orderData.waiterId = waiter._id;
-      orderData.waiter = waiter.name;
+      orderData.waiter = {
+        _id: waiter._id,
+        name: waiter.name,
+        phoneNumber: waiter.phoneNumber,
+        age: waiter.age
+      };
     }
 
     const newOrder = new Order(orderData);
@@ -338,8 +341,14 @@ if (!section) return res.status(404).json({ message: "Section not found" });
     table.currentBillAmount = additionalTotal;
     table.billNumber = billNumber;
     table.firstOrderTime = new Date();
+
     if (waiter) {
-      table.waiterId = waiter._id;
+      table.waiter = {
+        _id: waiter._id,
+        name: waiter.name,
+        phoneNumber: waiter.phoneNumber,
+        age: waiter.age
+      };
     }
 
     await table.save();
@@ -354,11 +363,7 @@ if (!section) return res.status(404).json({ message: "Section not found" });
       currentOrderItems: validatedItems,
       currentBillAmount: additionalTotal,
       billNumber,
-      waiter: waiter ? {
-        _id: waiter._id,
-        name: waiter.name,
-        phoneNumber: waiter.phoneNumber
-      } : null,
+      waiter: table.waiter || null,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt,
       firstOrderTime: table.firstOrderTime
@@ -368,6 +373,7 @@ if (!section) return res.status(404).json({ message: "Section not found" });
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // Delete an order by ID

@@ -26,9 +26,11 @@ const TableSchema = new mongoose.Schema({
     ref: 'Section',
     required: true
   },
-  waiterId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Waiter'
+  waiter: {
+    _id: mongoose.Schema.Types.ObjectId,
+    name: String,
+    phoneNumber: String,
+    age: Number
   },
   currentOrderItems: [TableOrderItemSchema],
   firstOrderTime: Date,
