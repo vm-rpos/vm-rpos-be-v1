@@ -6,7 +6,7 @@ const ms = require("ms");
 // Use separate secrets for different token types
 const ACCESS_TOKEN_SECRET = "Kedhareswarmatha";
 const REFRESH_TOKEN_SECRET = "KedhareswarmathaRefresh";
-const ACCESS_TOKEN_EXPIRY = "1h";
+const ACCESS_TOKEN_EXPIRY = "5h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const MAX_TOKENS_PER_USER = 5;
 
@@ -231,6 +231,7 @@ exports.refreshToken = async (req, res) => {
     res.json({
       accessToken,
       refreshToken: newRefreshToken,
+      expireAt: new Date(Date.now() + ms(REFRESH_TOKEN_EXPIRY)),
       requirePin: true,
       user: {
         _id: user._id,
