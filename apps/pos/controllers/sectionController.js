@@ -22,67 +22,55 @@ exports.getAllSections = async (req, res) => {
 
 // Get all sections with their tables and latest orders
 exports.getSectionsWithTables = async (req, res) => {
-    try {
-      if (!req.user || !req.user.restaurantId) {
-        return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
-      }
-  
-      const restaurantId = req.user.restaurantId;
-  
-      // Get all sections of the restaurant
-      const sections = await Section.find({ restaurantId }).sort({ createdAt: -1 }).lean();
-  
-      const responseData = [];
-  
-      for (const section of sections) {
-        // Get all tables for this section, and populate waiterId
-        const tables = await Table.find({ sectionId: section._id, restaurantId })
-          .populate({ path: 'waiterId', select: 'name phoneNumber', strictPopulate: false })
-          .lean();
-  
-        const tableData = [];
-  
-        for (const table of tables) {
-          // Get the latest order for the table
-          const latestOrder = await Order.findOne({ tableId: table._id })
-            .sort({ createdAt: -1 })
-            .lean();
-  
-          const hasOrders = !!latestOrder;
-          const totalItems = latestOrder?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
-  
-          tableData.push({
-            tableId: table._id,
-            tableNumber: table.tableNumber,
-            tableName: table.name,
-            waiter: table.waiterId
-              ? {
-                  waiterId: table.waiterId._id,
-                  name: table.waiterId.name,
-                  phoneNumber: table.waiterId.phoneNumber,
-                }
-              : null,
-            seats: table.seats,
-            billingPrice: latestOrder?.total || table.currentBillAmount || 0,
-            orderTime: latestOrder?.createdAt || table.firstOrderTime || null,
-            totalItems,
-            hasOrders,
-          });
-        }
-  
-        responseData.push({
-          sectionName: section.section,
-          sectionId: section._id,
-          tables: tableData,
+  try {
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+    }
+    
+    const restaurantId = req.user.restaurantId;
+    
+    // Get all sections of the restaurant
+    const sections = await Section.find({ restaurantId }).sort({ createdAt: -1 }).lean();
+    
+    const responseData = [];
+    
+    for (const section of sections) {
+      // Get all tables for this section (no need to populate waiterId as we have waiter object)
+      const tables = await Table.find({ sectionId: section._id, restaurantId }).lean();
+      
+      const tableData = [];
+      
+      for (const table of tables) {
+        // Use data directly from the table model including the waiter object
+        const totalItems = table.currentOrderItems?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+        
+        tableData.push({
+          tableId: table._id,
+          tableNumber: table.tableNumber,
+          tableName: table.name,
+          // Use the embedded waiter object directly instead of the populated waiterId
+          waiter: table.waiter || null,
+          seats: table.seats,
+          billingPrice: table.currentBillAmount || 0,
+          orderTime: table.firstOrderTime || null,
+          totalItems,
+          hasOrders: table.hasOrders,
         });
       }
-  
-      return res.status(200).json(responseData);
-    } catch (err) {
-      console.error("Error fetching sections with tables:", err);
-      res.status(500).json({ message: "Server error", error: err.message });
+      
+      responseData.push({
+        sectionName: section.section,
+        sectionId: section._id,
+        tables: tableData,
+      });
     }
-  };
+    
+    return res.status(200).json(responseData);
+  } catch (err) {
+    console.error("Error fetching sections with tables:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
   
   
 // Create a new section
