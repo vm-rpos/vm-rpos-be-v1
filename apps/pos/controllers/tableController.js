@@ -210,6 +210,10 @@ exports.placeOrder = async (req, res) => {
     const restaurantId = req.user.restaurantId;
     const tableId = req.params.id;
 
+    // if (!orders || !Array.isArray(orders) || orders.length === 0) {
+    //   return res.status(400).json({ message: "Orders must be a non-empty array" });
+    // }
+
     const table = await Table.findById(tableId);
     if (!table) return res.status(404).json({ message: "Table not found" });
 
@@ -227,42 +231,44 @@ exports.placeOrder = async (req, res) => {
     const additionalTotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     let waiter = null;
+    let waiterObject = null;
     if (waiterId) {
       waiter = await require("../models/Waiter").findById(waiterId);
       if (!waiter) return res.status(404).json({ message: "Waiter not found" });
+      
+      // Create waiter object to store in table
+      waiterObject = {
+        _id: waiter._id,
+        name: waiter.name,
+        phoneNumber: waiter.phoneNumber
+      };
     }
 
     const existingOrder = await Order.findOne({ tableId, status: "pending" });
 
     if (existingOrder) {
+      // Update items with new ones
       existingOrder.items = validatedItems;
-      existingOrder.total = additionalTotal;
+      existingOrder.total = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
       existingOrder.sectionName = section.section;
 
+      // Optionally update waiter if changed
       if (waiter) {
-        existingOrder.waiter = {
-          _id: waiter._id,
-          name: waiter.name,
-          phoneNumber: waiter.phoneNumber,
-          age: waiter.age
-        };
+        existingOrder.waiterId = waiter._id;
+        existingOrder.waiter = waiter.name;
       }
-
+    
       await existingOrder.save();
-
+    
+      // Update table as well
       table.currentOrderItems = validatedItems;
-      table.currentBillAmount = additionalTotal;
+      table.currentBillAmount = existingOrder.total;
       if (waiter) {
-        table.waiter = {
-          _id: waiter._id,
-          name: waiter.name,
-          phoneNumber: waiter.phoneNumber,
-          age: waiter.age
-        };
+        table.waiterId = waiter._id;
+        table.waiter = waiterObject; // Store waiter object in table
       }
-
       await table.save();
-
+    
       return res.json({
         _id: table._id,
         name: table.name,
@@ -271,16 +277,16 @@ exports.placeOrder = async (req, res) => {
         restaurantId,
         sectionId: table.sectionId,
         currentOrderItems: validatedItems,
-        currentBillAmount: additionalTotal,
+        currentBillAmount: existingOrder.total,
         billNumber: existingOrder.billNumber,
-        waiter: table.waiter || null,
+        waiter: waiterObject,
         createdAt: table.createdAt,
         updatedAt: table.updatedAt,
         firstOrderTime: table.firstOrderTime
       });
     }
-
-    // No existing pending order – create new one
+    
+    // 🆕 No existing pending order — create a new one
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
 
@@ -325,12 +331,8 @@ exports.placeOrder = async (req, res) => {
     };
 
     if (waiter) {
-      orderData.waiter = {
-        _id: waiter._id,
-        name: waiter.name,
-        phoneNumber: waiter.phoneNumber,
-        age: waiter.age
-      };
+      orderData.waiterId = waiter._id;
+      orderData.waiter = waiter.name;
     }
 
     const newOrder = new Order(orderData);
@@ -341,14 +343,9 @@ exports.placeOrder = async (req, res) => {
     table.currentBillAmount = additionalTotal;
     table.billNumber = billNumber;
     table.firstOrderTime = new Date();
-
     if (waiter) {
-      table.waiter = {
-        _id: waiter._id,
-        name: waiter.name,
-        phoneNumber: waiter.phoneNumber,
-        age: waiter.age
-      };
+      table.waiterId = waiter._id;
+      table.waiter = waiterObject; // Store waiter object in table
     }
 
     await table.save();
@@ -363,7 +360,7 @@ exports.placeOrder = async (req, res) => {
       currentOrderItems: validatedItems,
       currentBillAmount: additionalTotal,
       billNumber,
-      waiter: table.waiter || null,
+      waiter: waiterObject,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt,
       firstOrderTime: table.firstOrderTime
@@ -373,7 +370,6 @@ exports.placeOrder = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 
 // Delete an order by ID
@@ -396,9 +392,33 @@ exports.deleteOrderById = async (req, res) => {
       status: 'pending',
     });
 
-    // If no more pending orders, set hasOrders to false
+    // If no more pending orders, reset all table data to no order state
     if (pendingOrders.length === 0) {
-      await Table.findByIdAndUpdate(order.tableId, { hasOrders: false });
+      await Table.findByIdAndUpdate(order.tableId, { 
+        hasOrders: false,
+        currentOrderItems: [],
+        currentBillAmount: 0,
+        paymentMethod: null,
+        billNumber: null,
+        firstOrderTime: null,
+        waiterId: null,
+        waiter: null // Clear the waiter object
+      });
+    } else {
+      // If there are still pending orders, update the table with the remaining order data
+      // Calculate total from remaining orders
+      const totalAmount = pendingOrders.reduce((sum, order) => sum + order.total, 0);
+      
+      // Get all items from remaining orders
+      const allItems = pendingOrders.flatMap(order => order.items);
+      
+      // Update the table with the new totals and items
+      await Table.findByIdAndUpdate(order.tableId, {
+        hasOrders: true,
+        currentOrderItems: allItems,
+        currentBillAmount: totalAmount,
+        // We keep the same waiter, firstOrderTime and billNumber
+      });
     }
 
     res.json({ message: "Order deleted successfully", orderId });
@@ -462,27 +482,32 @@ exports.clearOrders = async (req, res) => {
       { status: 'completed', paymentMethod }
     );
 
-    // Clear order-related fields on the table
-    table.hasOrders = false;
-    table.currentOrderItems = [];
-    table.currentBillAmount = 0;
-    table.paymentMethod = null; // reset on table
-    table.billNumber = null;
-    table.firstOrderTime = null;
-    table.waiterId = null;
-
-    await table.save();
+    // Clear all order-related fields on the table, including the waiter data
+    const updatedTable = await Table.findByIdAndUpdate(
+      table._id,
+      {
+        hasOrders: false,
+        currentOrderItems: [],
+        currentBillAmount: 0,
+        paymentMethod: null,
+        billNumber: null,
+        firstOrderTime: null,
+        waiterId: null,
+        waiter: null // Clear the waiter object
+      },
+      { new: true }
+    );
 
     // Respond with updated info, including the payment method used
     res.json({
-      _id: table._id,
-      name: table.name,
-      tableNumber: table.tableNumber,
+      _id: updatedTable._id,
+      name: updatedTable.name,
+      tableNumber: updatedTable.tableNumber,
       hasOrders: false,
       orders: [],
       paymentMethod, // Include in response
-      createdAt: table.createdAt,
-      updatedAt: table.updatedAt
+      createdAt: updatedTable.createdAt,
+      updatedAt: updatedTable.updatedAt
     });
   } catch (err) {
     console.error('Error clearing orders:', err);

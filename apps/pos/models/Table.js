@@ -11,6 +11,16 @@ const TableOrderItemSchema = new mongoose.Schema({
   }
 });
 
+const WaiterSchema = new mongoose.Schema({
+  _id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Waiter',
+    required: true
+  },
+  name: { type: String, required: true },
+  phoneNumber: { type: String }
+});
+
 const TableSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   tableNumber: { type: Number, required: true },
@@ -26,12 +36,11 @@ const TableSchema = new mongoose.Schema({
     ref: 'Section',
     required: true
   },
-  waiter: {
-    _id: mongoose.Schema.Types.ObjectId,
-    name: String,
-    phoneNumber: String,
-    age: Number
+  waiterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Waiter'
   },
+  waiter: WaiterSchema, // Added waiter object schema
   currentOrderItems: [TableOrderItemSchema],
   firstOrderTime: Date,
   currentBillAmount: { type: Number, default: 0 },
