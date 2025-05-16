@@ -34,6 +34,35 @@ exports.createRestaurant = async (req, res) => {
   }
 };
 
+exports.uploadQrImage = async (req, res) => {
+  const restaurantId = req.params.id;
+
+  if (!req.file) {
+    return res.status(400).json({ message: "No image file uploaded" });
+  }
+
+  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+
+  try {
+    // Update the restaurant's qrImage field with the uploaded image URL
+    const updatedRestaurant = await Restaurant.findByIdAndUpdate(
+      restaurantId,
+      { qrImage: imageUrl },
+      { new: true }
+    );
+
+    if (!updatedRestaurant) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+
+    res.status(200).json({
+      message: "QR Image uploaded and restaurant updated successfully",
+      restaurant: updatedRestaurant,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 // Update a restaurant
 exports.updateRestaurant = async (req, res) => {
   try {
