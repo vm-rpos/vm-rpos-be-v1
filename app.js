@@ -11,7 +11,6 @@ const analyticsRoutes = require("./apps/pos/routes/analyticsRoutes");
 const restaurantRoutes = require("./apps/pos/routes/restaurantRoutes");
 const waiterRoutes = require("./apps/pos/routes/waiterRoutes");
 const tagRoutes = require("./apps/pos/routes/tagRoutes");
-const printerRoutes = require("./apps/pos/routes/printerRoutes");
 const orderRoutes = require("./apps/pos/routes/orderRoutes");
 const sectionRoutes = require("./apps/pos/routes/sectionRoutes");
 const vendorIvmRoutes = require("./apps/inventory/routes/vendorIvmRoutes");
