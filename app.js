@@ -47,7 +47,6 @@ app.use('/api/analytics', analyticsRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use('/api/waiters', waiterRoutes);
 app.use('/api/tags', tagRoutes);
-app.use('/api', printerRoutes);
 app.use('/api/orders',orderRoutes);
 app.use('/api/sections', sectionRoutes);
 
