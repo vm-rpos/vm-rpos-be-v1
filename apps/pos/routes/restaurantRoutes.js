@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const restaurantController = require("../controllers/restaurantController");
 const protect = require("../middlewares/authMiddleware");
+const upload = require("../middlewares/upload");~
 
 router.use(protect); // Protect all routes in this file
 
