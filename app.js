@@ -3,6 +3,8 @@ const cors = require("cors");
 require("dotenv").config();
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
+const fs = require("fs");
+const path = require("path");
 const tableRoutes = require('./apps/pos/routes/tableRoutes');
 const categoryRoutes = require("./apps/pos/routes/categoryRoutes");
 const analyticsRoutes = require("./apps/pos/routes/analyticsRoutes");
@@ -23,6 +25,12 @@ const authRoutes = require("./apps/pos/routes/authRoutes");
 const storeRoutes = require("./apps/inventory/routes/storeRoutes");
 
 const app = express();
+
+const uploadsPath = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath);
+  console.log("Created uploads folder");
+}
 
 // Middleware
 app.use(express.json());
