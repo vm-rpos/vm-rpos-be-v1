@@ -61,6 +61,10 @@ app.use('/api-ivm', storeRoutes);
 
 //Auth Routes
 app.use("/api/auth", authRoutes);
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
 
 
 
