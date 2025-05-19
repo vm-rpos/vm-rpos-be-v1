@@ -1,5 +1,5 @@
 const IvmItem = require('../models/Item');
-const IvmOrder = require('../models/Order'); // Ensure this model is properly defined
+const IvmOrder = require('../models/IVMOrder'); // Ensure this model is properly defined
 
 // Get total store value
 exports.getTotalStoreValue = async (req, res) => {

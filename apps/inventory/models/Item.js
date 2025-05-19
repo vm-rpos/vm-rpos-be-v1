@@ -23,7 +23,7 @@ const IvmItemSchema = new mongoose.Schema({
   },
   tags: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Tag'
+    ref: 'IvmTag'
   }],
   categoryId: {
     type: mongoose.Schema.Types.ObjectId,
