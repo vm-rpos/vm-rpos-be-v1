@@ -8,8 +8,13 @@ const { startOfDay, startOfWeek, startOfMonth,endOfDay } = require('date-fns');
 exports.createIVMOrder = async (req, res) => {
   try {
     const { orderType, vendorId, destination, items, expectedDeliveryDate } = req.body;
+    const restaurantId = req.user?.restaurantId;
+    console.log('restaurantId from token:', restaurantId);
 
-    // Validate required fields based on order type
+    if (!restaurantId) {
+      return res.status(401).json({ message: 'Unauthorized: restaurantId missing' });
+    }
+
     if (orderType === 'purchaseOrder' && !vendorId) {
       return res.status(400).json({ message: 'Vendor is required for purchase orders' });
     }
@@ -22,15 +27,14 @@ exports.createIVMOrder = async (req, res) => {
       return res.status(400).json({ message: 'At least one item is required' });
     }
 
-    // Validate each item
     for (const item of items) {
       if (!item.itemId || !item.name || !item.quantity || !item.price) {
         return res.status(400).json({ message: 'Each item must have itemId, name, quantity, and price' });
       }
     }
 
-    // Create the order
     const newOrder = new IVMOrder({
+      restaurantId,
       orderType,
       vendorId: vendorId || null,
       destination: destination || null,
@@ -38,30 +42,24 @@ exports.createIVMOrder = async (req, res) => {
       expectedDeliveryDate
     });
 
-    // Save the order
     const savedOrder = await newOrder.save();
 
-    // Process items based on order type
     if (orderType === 'purchaseOrder') {
       for (const item of items) {
-        // Find the existing item
         const existingItem = await Item.findById(item.itemId);
-
         if (!existingItem) {
           return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
         }
 
-        // Calculate new average price and total purchase value
         const newTotalQuantity = existingItem.quantity + item.quantity;
         const newTotalPurchaseValue = (existingItem.totalPurchaseValue || 0) + (item.price * item.quantity);
         const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
 
-        // Update item details
         await Item.findByIdAndUpdate(
           item.itemId,
           {
             $inc: { quantity: item.quantity },
-            price: item.price, // Update current price to latest price
+            price: item.price,
             avgPrice: newAvgPrice,
             totalPurchaseValue: newTotalPurchaseValue
           },
@@ -69,7 +67,6 @@ exports.createIVMOrder = async (req, res) => {
         );
       }
     } else if (orderType === 'saleOrder' || orderType === 'stockoutOrder') {
-      // Reduce item quantities for sale or stockout orders
       for (const item of items) {
         await Item.findByIdAndUpdate(
           item.itemId,
@@ -79,7 +76,6 @@ exports.createIVMOrder = async (req, res) => {
       }
     }
 
-    // Populate the order
     const populatedOrder = await IVMOrder.findById(savedOrder._id)
       .populate('vendorId')
       .populate('items.itemId');
@@ -94,14 +90,18 @@ exports.createIVMOrder = async (req, res) => {
 // Get all IVM Orders with filtering
 exports.getAllIVMOrders = async (req, res) => {
   try {
-    console.log("Received request for getAllIVMOrders");
+    const restaurantId = req.user?.restaurantId;
+    console.log("restaurantId from token:", restaurantId);
 
-    const orders = await IVMOrder.find()
+    if (!restaurantId) {
+      return res.status(401).json({ message: 'Unauthorized: restaurantId missing' });
+    }
+
+    const orders = await IVMOrder.find({ restaurantId })
       .populate('vendorId')
       .populate('items.itemId');
 
     console.log("Fetched orders count:", orders.length);
-
     res.json(orders);
   } catch (err) {
     console.error('Error fetching IVM orders:', err);
@@ -109,9 +109,7 @@ exports.getAllIVMOrders = async (req, res) => {
   }
 };
 
-
 // Get orders by type with search, filtering, and pagination
-// Add these imports at the top if not already present
 //const { startOfDay, endOfDay, startOfWeek, startOfMonth } = require('date-fns');
 
 exports.getOrdersByType = async (req, res) => {

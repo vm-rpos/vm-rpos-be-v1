@@ -3,13 +3,15 @@ const Item = require('../models/Item');
 // Get all items
 exports.getAllItems = async (req, res) => {
   try {
-    const items = await Item.find().populate('categoryId tags');
+    const restaurantId = req.user.restaurantId; // ✅ From token
+    const items = await Item.find({ restaurantId }).populate('categoryId tags');
     res.json(items);
   } catch (err) {
     console.error('Error getting items:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Get a specific item by ID
 exports.getItemById = async (req, res) => {

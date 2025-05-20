@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const ivmCategoryController = require('../controllers/categoryController'); // Update controller file name
+const protect = require('../../pos/middlewares/authMiddleware');
+
+router.use(protect);
 
 // IvmCategory routes
 router.get('/', ivmCategoryController.getAllIvmCategories);

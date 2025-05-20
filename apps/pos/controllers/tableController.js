@@ -476,6 +476,8 @@ exports.clearOrders = async (req, res) => {
       return res.status(400).json({ message: 'Payment method is required' });
     }
 
+     const billNumber = table.billNumber; // ✅ Save before clearing
+
     // Update all pending orders: mark as completed and set payment method
     await Order.updateMany(
       { tableId: table._id, status: 'pending' },
@@ -506,7 +508,7 @@ exports.clearOrders = async (req, res) => {
       hasOrders: false,
       orders: [],
       paymentMethod, // Include in response
-      billNumber: updatedTable.billNumber,
+      billNumber,
       createdAt: updatedTable.createdAt,
       updatedAt: updatedTable.updatedAt
     });

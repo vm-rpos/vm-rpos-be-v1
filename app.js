@@ -53,7 +53,7 @@ app.use('/api/sections', sectionRoutes);
 app.use('/api-ivm/categories', categoryIvmRoutes);//done
 app.use('/api-ivm/tags', tagIvmRoutes);//done
 app.use('/api-ivm/vendors', vendorIvmRoutes);//done
-app.use('/api-ivm/ivmorders', ivmRoutes);//done
+app.use('/api-ivm/orders', ivmRoutes);//done
 app.use('/api-ivm/items', itemIvmRoutes);//done
 app.use('/api-ivm', storeRoutes);
 

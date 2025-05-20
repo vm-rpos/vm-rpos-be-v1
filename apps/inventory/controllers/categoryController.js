@@ -2,16 +2,25 @@ const Category = require('../models/Category');
 const Item = require('../models/Item');
 const Tag = require('../models/Tag');
 
-// Get all categories with their items
+// Get all categories with their items, optionally filtered by restaurantId
 exports.getAllIvmCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    const restaurantId = req.user?.restaurantId;
+    console.log('restaurantId from token:', restaurantId);
+
+    const categoryFilter = restaurantId ? { restaurantId } : {};
+    const categories = await Category.find(categoryFilter).sort({ name: 1 });
+
     const categoriesWithItems = await Promise.all(
       categories.map(async (category) => {
-        const items = await Item.find({ categoryId: category._id }).populate('tags');
+        const itemFilter = { categoryId: category._id };
+        if (restaurantId) itemFilter.restaurantId = restaurantId;
+
+        const items = await Item.find(itemFilter).populate('tags');
         return { _id: category._id, name: category.name, items };
       })
     );
+
     res.json(categoriesWithItems);
   } catch (err) {
     console.error('Error getting categories:', err);
@@ -19,16 +28,25 @@ exports.getAllIvmCategories = async (req, res) => {
   }
 };
 
-// Create a new category
+// Create a new category, storing restaurantId if available
 exports.createIvmCategory = async (req, res) => {
   try {
     const { name } = req.body;
+    const restaurantId = req.user?.restaurantId;
+    console.log('restaurantId from token:', restaurantId);
+
     if (!name) return res.status(400).json({ message: 'Category name is required' });
 
-    const existingCategory = await Category.findOne({ name });
+    const existingFilter = { name };
+    if (restaurantId) existingFilter.restaurantId = restaurantId;
+
+    const existingCategory = await Category.findOne(existingFilter);
     if (existingCategory) return res.status(400).json({ message: 'Category already exists' });
 
-    const newCategory = new Category({ name });
+    const newCategoryData = { name };
+    if (restaurantId) newCategoryData.restaurantId = restaurantId;
+
+    const newCategory = new Category(newCategoryData);
     const savedCategory = await newCategory.save();
 
     res.status(201).json({ _id: savedCategory._id, name: savedCategory.name, items: [] });
@@ -37,6 +55,7 @@ exports.createIvmCategory = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Get a specific category with its items
 exports.getIvmCategoryById = async (req, res) => {
@@ -95,39 +114,46 @@ exports.deleteIvmCategory = async (req, res) => {
 exports.addItemToIvmCategory = async (req, res) => {
   try {
     const { name, price, description, tags } = req.body;
-    if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
+    const restaurantId = req.user.restaurantId; // ✅ Get restaurantId from token
+
+    if (!name || price === undefined) {
+      return res.status(400).json({ message: 'Item name and price are required' });
+    }
 
     const category = await Category.findById(req.params.id);
     if (!category) return res.status(404).json({ message: 'Category not found' });
 
-    const existingItem = await Item.findOne({ categoryId: category._id, name });
-    if (existingItem) return res.status(400).json({ message: 'Item with this name already exists in the category' });
+    if (!category.restaurantId.equals(restaurantId)) {
+      return res.status(403).json({ message: 'Not authorized to add items to this category' });
+    }
 
-    // Handle tags
+    const existingItem = await Item.findOne({ categoryId: category._id, name });
+    if (existingItem) {
+      return res.status(400).json({ message: 'Item with this name already exists in the category' });
+    }
+
     let tagIds = [];
     if (tags && tags.length > 0) {
-      // Process each tag name
       for (const tagName of tags) {
-        // Look for existing tag or create a new one
         let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, 'i') } });
-        
         if (!tag) {
           tag = new Tag({ name: tagName });
           await tag.save();
         }
-        
         tagIds.push(tag._id);
       }
     }
 
-    const newItem = new Item({ 
-      name, 
-      price, 
-      description: description || "", 
+    const newItem = new Item({
+      name,
+      price,
+      description: description || '',
       tags: tagIds,
-      categoryId: category._id, 
-      categoryName: category.name 
+      categoryId: category._id,
+      categoryName: category.name,
+      restaurantId // ✅ Store restaurantId on the item
     });
+
     await newItem.save();
 
     const items = await Item.find({ categoryId: category._id }).populate('tags');
@@ -137,6 +163,7 @@ exports.addItemToIvmCategory = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Update item in category with tag handling
 exports.updateItemInIvmCategory = async (req, res) => {

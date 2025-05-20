@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const ivmOrderController = require('../controllers/ivmOrderController');
+const protect = require('../../pos/middlewares/authMiddleware');
+
+router.use(protect);
 
 // ✅ Define these first to avoid conflict
 router.get('/count', ivmOrderController.getOrderCounts);

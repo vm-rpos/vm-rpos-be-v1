@@ -25,6 +25,11 @@ const IvmItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'IvmTag'
   }],
+   restaurantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Restaurant',
+    required: true
+  },
   categoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'IvmCategory',

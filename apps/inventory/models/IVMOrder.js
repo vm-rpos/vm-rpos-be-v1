@@ -27,6 +27,11 @@ const ivmOrderSchema = new mongoose.Schema({
     enum: ['purchaseOrder', 'saleOrder', 'stockoutOrder'],
     required: true
   },
+  restaurantId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Restaurant',
+  required: true
+},
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Vendor',

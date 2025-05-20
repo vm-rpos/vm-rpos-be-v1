@@ -22,6 +22,11 @@ const vendorSchema = new mongoose.Schema({
       city: String,
       state: String,
       zip: String
+    },
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Restaurant',
+      required: true
     }
   }, { timestamps: true });
 
