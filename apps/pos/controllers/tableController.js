@@ -506,6 +506,7 @@ exports.clearOrders = async (req, res) => {
       hasOrders: false,
       orders: [],
       paymentMethod, // Include in response
+      billNumber: updatedTable.billNumber,
       createdAt: updatedTable.createdAt,
       updatedAt: updatedTable.updatedAt
     });
