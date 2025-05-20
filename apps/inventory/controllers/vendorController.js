@@ -3,7 +3,8 @@ const Vendor = require('../models/Vendor');
 //Get all vendors
 exports.getAllVendors = async (req, res) => {
   try {
-    const vendors = await Vendor.find().sort({ createdAt: -1 });
+    const restaurantId = req.user.restaurantId;
+    const vendors = await Vendor.find({restaurantId}).sort({ createdAt: -1 });
     res.json(vendors);
   } catch (err) {
     console.error('Error fetching vendors:', err);
@@ -16,17 +17,19 @@ exports.createVendor = async (req, res) => {
   try {
     const { name, age, phoneNumber, location } = req.body;
 
+    const restaurantId = req.user.restaurantId;
+
     if (!name || !age || !phoneNumber || !location) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
     // Check if phone number already exists
-    const existingVendor = await Vendor.findOne({ phoneNumber });
+    const existingVendor = await Vendor.findOne({ phoneNumber,restaurantId });
     if (existingVendor) {
       return res.status(400).json({ message: 'Phone number already exists' });
     }
 
-    const newVendor = new Vendor({ name, age, phoneNumber, location });
+    const newVendor = new Vendor({ name, age, phoneNumber, location,restaurantId });
     await newVendor.save();
 
     res.status(201).json(newVendor);

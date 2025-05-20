@@ -26,7 +26,7 @@ const vendorSchema = new mongoose.Schema({
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Restaurant',
-      required: true
+      required: false
     }
   }, { timestamps: true });
 
