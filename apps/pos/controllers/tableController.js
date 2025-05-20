@@ -376,25 +376,32 @@ exports.placeOrder = async (req, res) => {
 exports.deleteOrderById = async (req, res) => {
   try {
     const orderId = req.params.orderId;
+    const { reason } = req.body; // Get reason from request body
 
-    // Find the order to delete
+    if (!reason) {
+      return res.status(400).json({ message: "Reason for deleting order is required" });
+    }
+
+    // Find the order to mark as deleted
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // Delete the order
-    await order.deleteOne();
+    // Mark the order as deleted
+    order.isDeleted = true;
+    order.deletedReason = reason;
+    await order.save();
 
-    // Check if the table still has other pending orders
+    // Check for remaining pending (non-deleted) orders for the table
     const pendingOrders = await Order.find({
       tableId: order.tableId,
       status: 'pending',
+      isDeleted: { $ne: true }
     });
 
-    // If no more pending orders, reset all table data to no order state
     if (pendingOrders.length === 0) {
-      await Table.findByIdAndUpdate(order.tableId, { 
+      await Table.findByIdAndUpdate(order.tableId, {
         hasOrders: false,
         currentOrderItems: [],
         currentBillAmount: 0,
@@ -402,31 +409,26 @@ exports.deleteOrderById = async (req, res) => {
         billNumber: null,
         firstOrderTime: null,
         waiterId: null,
-        waiter: null // Clear the waiter object
+        waiter: null
       });
     } else {
-      // If there are still pending orders, update the table with the remaining order data
-      // Calculate total from remaining orders
       const totalAmount = pendingOrders.reduce((sum, order) => sum + order.total, 0);
-      
-      // Get all items from remaining orders
       const allItems = pendingOrders.flatMap(order => order.items);
-      
-      // Update the table with the new totals and items
+
       await Table.findByIdAndUpdate(order.tableId, {
         hasOrders: true,
         currentOrderItems: allItems,
-        currentBillAmount: totalAmount,
-        // We keep the same waiter, firstOrderTime and billNumber
+        currentBillAmount: totalAmount
       });
     }
 
-    res.json({ message: "Order deleted successfully", orderId });
+    res.json({ message: "Order marked as deleted", orderId });
   } catch (err) {
     console.error("Error deleting order:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Modified getTableById to include waiter info
 exports.getTableById = async (req, res) => {

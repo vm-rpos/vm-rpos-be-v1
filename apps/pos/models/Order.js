@@ -76,7 +76,10 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'completed', 'cancelled'],
     default: 'pending'
-  }
+  },
+  isDeleted: { type: Boolean, default: false },
+deletedReason: { type: String, default: null }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', OrderSchema);
