@@ -132,7 +132,9 @@ exports.getAllOrders = async (req, res) => {
       createdAt: order.createdAt,
       restaurantId: order.restaurant?._id || order.restaurantId,
       restaurantName: order.restaurant?.name || "Unknown",
-      billNumber: order.billNumber
+      billNumber: order.billNumber,
+      isDeleted: order.isDeleted,
+      deletedReason: order.deletedReason,
     }));
 
     res.json({
@@ -215,6 +217,7 @@ exports.getOrderMetrics = async (req, res) => {
     // Base query
     const baseQuery = {
       restaurantId: restaurantObjectId,
+        isDeleted: false,
       ...dateFilter
     };
 
@@ -273,6 +276,8 @@ exports.getTopTenOrders = async (req, res) => {
     const orders = await Order.find({
       restaurantId: restaurantObjectId,
       status: "completed",
+      isDeleted: false,
+
     })
       .sort({ total: -1 })
       .limit(10)

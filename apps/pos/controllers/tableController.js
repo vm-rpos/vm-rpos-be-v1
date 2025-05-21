@@ -249,7 +249,7 @@ exports.placeOrder = async (req, res) => {
         if (existingOrder) {
       const newItemMap = new Map(validatedItems.map(item => [item.itemId?.toString(), item]));
 
-      const cancelledReason = req.body.cancelledReason || "Removed before checkout";
+      const cancelledReason = req.body.cancelledReason;
 
       // Step 1: Mark removed items as cancelled
       const updatedItems = existingOrder.items.map(existingItem => {

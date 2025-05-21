@@ -50,6 +50,7 @@ const analyticsController = {
         restaurantId: restaurantObjectId,
         status: { $in: ["pending", "completed"] },
         ...dateFilter,
+        isDeleted: false
       }).populate("waiterId");
 
       // Group orders by table
@@ -82,7 +83,7 @@ const analyticsController = {
               tableNumber: tableNumber,
               tableName: tableName,
               waiterId: order.waiterId || "Unknown",
-              waiterName: order.waiterName || "Unknown",
+              waiterName: order.waiter || "Unknown",
             });
           });
         }
@@ -117,7 +118,7 @@ const analyticsController = {
 
         // Track waiter performance
         const waiterId = order.waiterId || "Unknown";
-        const waiterName = order.waiterName || "Unknown Staff";
+        const waiterName = order.waiter|| "Unknown Staff";
         const waiterKey = `${waiterId}-${waiterName}`;
 
         if (!waiterPerformance[waiterKey]) {
@@ -274,6 +275,7 @@ const analyticsController = {
         restaurantId: restaurantObjectId,
         ...dateFilter,
         status: "completed", // Only fetch completed orders
+        isDeleted: false
       })
         .sort({ total: -1 }) // Sort by total price high to low
         .limit(10) // Get only top 10
@@ -284,7 +286,7 @@ const analyticsController = {
           _id: order._id,
           tableNumber: order.tableId ? order.tableId.tableNumber : "Unknown",
           tableName: order.tableId ? order.tableId.name : "Unknown",
-          waiterName: order.waiterName || "Unknown Staff",
+          waiterName: order.waiter || "Unknown Staff",
           items: order.items,
           total: order.total,
           status: order.status,
