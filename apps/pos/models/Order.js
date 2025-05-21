@@ -24,7 +24,10 @@ const OrderItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Item',
     required: false
-  }
+  },
+  isCancelled: { type: Boolean, default: false },
+cancelledReason: { type: String, default: null }
+
 });
 
 const OrderSchema = new mongoose.Schema({
