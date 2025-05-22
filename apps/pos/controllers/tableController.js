@@ -225,7 +225,9 @@ exports.placeOrder = async (req, res) => {
       price: Number(item.price),
       quantity: Number(item.quantity) || 1,
       categoryName: item.categoryName || "Uncategorized",
-      itemId: item.itemId || null
+      itemId: item.itemId || null,
+      isCancelled: !!item.cancelledReason,
+      cancelledReason: item.cancelledReason || null
     }));
 
     const additionalTotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -259,13 +261,14 @@ exports.placeOrder = async (req, res) => {
         if (existingItem.isCancelled) return existingItem;
 
         // If not in new order list, mark as cancelled
-        if (!newItemMap.has(idStr)) {
-          return {
-            ...existingItem.toObject(),
-            isCancelled: true,
-            cancelledReason
-          };
-        }
+       if (!newItemMap.has(idStr)) {
+  return {
+    ...existingItem.toObject(),
+    isCancelled: true,
+    cancelledReason
+  };
+}
+
 
         // Otherwise, update quantity and price
         const newItem = newItemMap.get(idStr);
@@ -273,7 +276,9 @@ exports.placeOrder = async (req, res) => {
           ...existingItem.toObject(),
           quantity: newItem.quantity,
           price: newItem.price,
-          categoryName: newItem.categoryName || "Uncategorized"
+          categoryName: newItem.categoryName || "Uncategorized",
+           isCancelled: !!newItem.cancelledReason,
+  cancelledReason: newItem.cancelledReason || null
         };
       });
 
