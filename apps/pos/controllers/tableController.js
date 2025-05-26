@@ -50,6 +50,8 @@ exports.getAllTables = async (req, res) => {
         const latestOrder = await Order.findOne({
           tableId: table._id,
           status: "pending",
+            isDeleted: { $ne: true },  // 👈 ignore deleted orders
+
         }).sort({ createdAt: -1 });
 
         return {
