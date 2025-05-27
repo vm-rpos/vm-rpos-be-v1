@@ -22,6 +22,7 @@ const ivmRoutes = require("./apps/inventory/routes/ivmRoutes");
 const authRoutes = require("./apps/pos/routes/authRoutes");
 const storeRoutes = require("./apps/inventory/routes/storeRoutes");
 
+require("dotenv").config();
 const app = express();
 
 const uploadsPath = path.join(__dirname, "uploads");

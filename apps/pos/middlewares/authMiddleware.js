@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const ACCESS_TOKEN_SECRET = "Kedhareswarmatha";
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "Kedhareswarmatha";
 
 const protect = async (req, res, next) => {
   try {

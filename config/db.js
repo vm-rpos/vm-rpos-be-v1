@@ -1,10 +1,12 @@
 const mongoose = require("mongoose");
+const LOCAL_DB_URL = process.env.LOCAL_DB_URL;
+const MONGO_URL = process.env.MONGO_URL;
 
 const connectDB = async () => {
   try {
     await mongoose.connect(
-      // "mongodb://127.0.0.1:27017/restobar", 
-      "mongodb+srv://vmrpos:WROiki090yOyHctR@cluster0.hqqtfyf.mongodb.net/restaurant?retryWrites=true&w=majority&appName=Cluster0",
+      //  LOCAL_DB_URL, 
+      MONGO_URL ,
       {
       useNewUrlParser: true,
       useUnifiedTopology: true,

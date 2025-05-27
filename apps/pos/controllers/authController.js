@@ -1,46 +1,12 @@
 const User = require("../models/User");
+const {generateTokens,cleanExpiredTokens} = require('../../../utils/tokenUtils');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const ms = require("ms");
+const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "5h"; // Default 15 minutes
+const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d"; // Default 7 days
+const MAX_TOKENS_PER_USER = process.env.MAX_TOKENS_PER_USER || 5; // Maximum number of tokens per user
 
-// Use separate secrets for different token types
-const ACCESS_TOKEN_SECRET = "Kedhareswarmatha";
-const REFRESH_TOKEN_SECRET = "KedhareswarmathaRefresh";
-const ACCESS_TOKEN_EXPIRY = "5h";
-const REFRESH_TOKEN_EXPIRY = "7d";
-const MAX_TOKENS_PER_USER = 5;
-
-
-// Helper function to clean expired tokens
-const cleanExpiredTokens = async (user) => {
-  const now = new Date();
-  user.tokens = user.tokens.filter(token => {
-    try {
-      const decoded = jwt.verify(token.refreshToken, REFRESH_TOKEN_SECRET);
-      return decoded.exp * 1000 > now.getTime();
-    } catch (err) {
-      return false; // Remove if token is invalid/expired
-    }
-  });
-  await user.save();
-};
-
-// Generate tokens with timestamp
-const generateTokens = (user) => {
-  const accessToken = jwt.sign(
-    { userId: user._id, restaurantId: user.restaurantId },
-    ACCESS_TOKEN_SECRET,
-    { expiresIn: ACCESS_TOKEN_EXPIRY }
-  );
-  
-  const refreshToken = jwt.sign(
-    { userId: user._id, restaurantId: user.restaurantId },
-    REFRESH_TOKEN_SECRET,
-    { expiresIn: REFRESH_TOKEN_EXPIRY }
-  );
-
-  return { accessToken, refreshToken };
-};
 
 // User Signup
 exports.signup = async (req, res) => {

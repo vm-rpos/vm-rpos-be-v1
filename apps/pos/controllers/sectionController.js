@@ -1,7 +1,5 @@
-const mongoose = require('mongoose');
 const Section = require('../models/Section');
 const Table = require('../models/Table');
-const Order = require('../models/Order');
 
 // Get all sections for the user's restaurant
 exports.getAllSections = async (req, res) => {
@@ -12,7 +10,7 @@ exports.getAllSections = async (req, res) => {
 
     const restaurantId = req.user.restaurantId;
 
-    const sections = await Section.find({ restaurantId }).sort({ createdAt: -1 });
+    const sections = await Section.find({ restaurantId }).sort({ createdAt: -1 }).lean();
     res.json(sections);
   } catch (err) {
     console.error("Error fetching sections:", err);

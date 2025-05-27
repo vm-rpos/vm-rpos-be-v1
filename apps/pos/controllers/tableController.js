@@ -491,7 +491,8 @@ exports.getTableById = async (req, res) => {
 
     const currentOrder = await Order.findOne({
       tableId: table._id,
-      status: 'pending'
+      status: 'pending',
+      isDeleted: { $ne: true } 
     }).sort({ createdAt: -1 }).populate('waiterId');
 
     let waiterInfo = null;
