@@ -6,6 +6,8 @@ const ms = require("ms");
 const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "5h"; // Default 15 minutes
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d"; // Default 7 days
 const MAX_TOKENS_PER_USER = process.env.MAX_TOKENS_PER_USER || 5; // Maximum number of tokens per user
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "Kedhareswarmatha";
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "Kedhareswarmatha";
 
 
 // User Signup

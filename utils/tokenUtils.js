@@ -8,7 +8,7 @@ const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY;
 // Generate access + refresh tokens
 const generateTokens = (user) => {
   const accessToken = jwt.sign(
-    { userId: user._id, restaurantId: user.restaurantId },
+    { userId: user._id, restaurantId: user.restaurantId, role: user.role },
     ACCESS_TOKEN_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
   );

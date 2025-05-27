@@ -17,10 +17,11 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
     req.user = {
       id: decoded.userId,
-      restaurantId: decoded.restaurantId
+      restaurantId: decoded.restaurantId,
+      role: decoded.role
     };
     
-    console.log(`Authentication successful. User ID: ${decoded.userId}, Restaurant ID: ${decoded.restaurantId}`);
+    console.log(`Authentication successful. User ID: ${decoded.userId}, Restaurant ID: ${decoded.restaurantId}, Role: ${decoded.role}`);
     
     next();
   } catch (err) {

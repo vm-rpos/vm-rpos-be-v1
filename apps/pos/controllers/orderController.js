@@ -6,6 +6,8 @@ const mongoose = require('mongoose');
 exports.getAllOrders = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
+    const role = req.user?.role;
+
 
     if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({ message: "Invalid or missing restaurant ID in token" });
@@ -58,6 +60,7 @@ exports.getAllOrders = async (req, res) => {
 
     const matchStage = {
       restaurantId: restaurantObjectId,
+      ...(role === 'pos' ? { isDeleted: false } : {}),
       ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {})
     };
 
@@ -161,6 +164,7 @@ exports.getAllOrders = async (req, res) => {
 exports.getOrderMetrics = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
+    const role = req.user?.role;
 
     const {timeRange = "all", startDateTime, endDateTime, customStartDate, customEndDate } = req.query;
 
@@ -217,7 +221,7 @@ exports.getOrderMetrics = async (req, res) => {
     // Base query
     const baseQuery = {
       restaurantId: restaurantObjectId,
-        isDeleted: false,
+         ...(role === 'pos' ? { isDeleted: false } : {}),
       ...dateFilter
     };
 
