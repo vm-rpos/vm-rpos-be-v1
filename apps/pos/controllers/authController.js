@@ -131,7 +131,7 @@ exports.verifyPin = async (req, res) => {
 
     // Generate new access token (refresh token remains the same)
     const accessToken = jwt.sign(
-      { userId: user._id, restaurantId: user.restaurantId },
+      { userId: user._id, restaurantId: user.restaurantId , role: user.role },
       ACCESS_TOKEN_SECRET,
       { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
