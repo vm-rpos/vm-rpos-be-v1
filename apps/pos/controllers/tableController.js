@@ -248,7 +248,7 @@ exports.placeOrder = async (req, res) => {
       };
     }
 
-    const existingOrder = await Order.findOne({ tableId, status: "pending" });
+    const existingOrder = await Order.findOne({ tableId, status: "pending" ,isDeleted: { $ne: true }});
 
         if (existingOrder) {
       const newItemMap = new Map(validatedItems.map(item => [item.itemId?.toString(), item]));
