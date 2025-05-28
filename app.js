@@ -5,7 +5,7 @@ const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const fs = require("fs");
 const path = require("path");
-const tableRoutes = require('./apps/pos/routes/tableRoutes');
+const tableRoutes = require("./apps/pos/routes/tableRoutes");
 const categoryRoutes = require("./apps/pos/routes/categoryRoutes");
 const analyticsRoutes = require("./apps/pos/routes/analyticsRoutes");
 const restaurantRoutes = require("./apps/pos/routes/restaurantRoutes");
@@ -21,6 +21,8 @@ const itemIvmRoutes = require("./apps/inventory/routes/itemIvmRoutes");
 const ivmRoutes = require("./apps/inventory/routes/ivmRoutes");
 const authRoutes = require("./apps/pos/routes/authRoutes");
 const storeRoutes = require("./apps/inventory/routes/storeRoutes");
+
+const usersRoutes = require("./apps/pos/routes/usersRoutes");
 
 require("dotenv").config();
 const app = express();
@@ -42,30 +44,28 @@ connectDB();
 
 // POS API Routes
 app.use("/api/tables", tableRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/analytics', analyticsRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/analytics", analyticsRoutes);
 app.use("/api/restaurants", restaurantRoutes);
-app.use('/api/waiters', waiterRoutes);
-app.use('/api/tags', tagRoutes);
-app.use('/api/orders',orderRoutes);
-app.use('/api/sections', sectionRoutes);
+app.use("/api/waiters", waiterRoutes);
+app.use("/api/tags", tagRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/sections", sectionRoutes);
+app.use("/api/users", usersRoutes);
 
 // Inventory API Routes
-app.use('/api-ivm/categories', categoryIvmRoutes);//done
-app.use('/api-ivm/tags', tagIvmRoutes);//done
-app.use('/api-ivm/vendors', vendorIvmRoutes);//done
-app.use('/api-ivm/orders', ivmRoutes);//done
-app.use('/api-ivm/items', itemIvmRoutes);//done
-app.use('/api-ivm', storeRoutes);
+app.use("/api-ivm/categories", categoryIvmRoutes); //done
+app.use("/api-ivm/tags", tagIvmRoutes); //done
+app.use("/api-ivm/vendors", vendorIvmRoutes); //done
+app.use("/api-ivm/orders", ivmRoutes); //done
+app.use("/api-ivm/items", itemIvmRoutes); //done
+app.use("/api-ivm", storeRoutes);
 
 //Auth Routes
 app.use("/api/auth", authRoutes);
-app.get('/ping', (req, res) => {
-  res.send('pong');
+app.get("/ping", (req, res) => {
+  res.send("pong");
 });
-
-
-
 
 // Start Server
 const PORT = process.env.PORT || 5000;
