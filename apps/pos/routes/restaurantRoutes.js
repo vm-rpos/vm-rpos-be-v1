@@ -4,7 +4,7 @@ const restaurantController = require("../controllers/restaurantController");
 const protect = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/upload");~
 
-router.use(protect); // Protect all routes in this file
+// router.use(protect); // Protect all routes in this file
 
 router.get("/", restaurantController.getAllRestaurants);
 router.get("/:id", restaurantController.getRestaurantById);
