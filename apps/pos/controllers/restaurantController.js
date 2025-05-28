@@ -1,4 +1,5 @@
 const Restaurant = require("../models/Restaurant");
+const mongoose = require('mongoose');
 
 // Get all restaurants
 exports.getAllRestaurants = async (req, res) => {

@@ -3,24 +3,6 @@ const Item = require('../models/Item');
 const Tag = require('../models/Tag');
 const mongoose = require('mongoose');
 
-// Get all categories with their items
-// exports.getAllCategories = async (req, res) => {
-//   try {
-//     const categories = await Category.find().sort({ name: 1 });
-//     const categoriesWithItems = await Promise.all(
-//       categories.map(async (category) => {
-//         const items = await Item.find({ categoryId: category._id }).populate('tags');
-//         return { _id: category._id, name: category.name, items };
-//       })
-//     );
-//     res.json(categoriesWithItems);
-//   } catch (err) {
-//     console.error('Error getting categories:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-//Get based on RestaurantId
 exports.getAllCategories = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
