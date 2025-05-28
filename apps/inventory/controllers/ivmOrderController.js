@@ -115,16 +115,21 @@ exports.getAllIVMOrders = async (req, res) => {
 exports.getOrdersByType = async (req, res) => {
   try {
     const { orderType } = req.params;
-    const { 
-      status, 
-      dateFilter, 
-      searchTerm, 
-      page, 
-      pageSize, 
-      startDate, 
+    const {
+      status,
+      dateFilter,
+      searchTerm,
+      page,
+      pageSize,
+      startDate,
       endDate,
       dateField = 'createdAt' // Default to createdAt if not specified
     } = req.query;
+
+    const restaurantId = req.user?.restaurantId;
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'Missing restaurant ID in token' });
+    }
 
     console.log("Received request for getOrdersByType");
     console.log("Params:", req.params);
@@ -135,71 +140,55 @@ exports.getOrdersByType = async (req, res) => {
       return res.status(400).json({ message: 'Invalid order type' });
     }
 
-    // Create filter object
-    const filter = { orderType };
+    // Create base filter
+    const filter = { orderType, restaurantId };
 
-    // Filter by status
+    // Status filter
     if (status && status.toLowerCase() !== 'all') {
       filter.status = status;
     }
 
-    // Apply date filtering
+    // Date filtering
     if (dateFilter && dateFilter !== 'all') {
       const today = startOfDay(new Date());
-      const dateFieldToFilter = dateField; // Use the specified date field
-      
-      // For custom date range
+      const dateFieldToFilter = dateField;
+
       if (dateFilter === 'custom' && startDate && endDate) {
         const start = startOfDay(new Date(startDate));
         const end = endOfDay(new Date(endDate));
-        
-        filter[dateFieldToFilter] = { 
-          $gte: start, 
-          $lte: end 
-        };
-        
+        filter[dateFieldToFilter] = { $gte: start, $lte: end };
         console.log(`Custom date range applied: ${start} to ${end} on field ${dateFieldToFilter}`);
       } else {
-        // For predefined date filters
-        let startDate;
-        
+        let rangeStart;
         switch (dateFilter) {
           case 'today':
-            startDate = today;
+            rangeStart = today;
             break;
           case 'this week':
-            startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
+            rangeStart = startOfWeek(today, { weekStartsOn: 1 });
             break;
           case 'this month':
-            startDate = startOfMonth(today);
+            rangeStart = startOfMonth(today);
             break;
-          default:
-            startDate = null;
         }
-        
-        if (startDate) {
-          filter[dateFieldToFilter] = { $gte: startDate };
+        if (rangeStart) {
+          filter[dateFieldToFilter] = { $gte: rangeStart };
         }
       }
     }
 
     console.log("Filter before search:", JSON.stringify(filter));
 
-    // Rest of the function remains the same...
-    
     // Search functionality
     let searchQuery = {};
     if (searchTerm && searchTerm.trim() !== '') {
       const searchRegex = new RegExp(searchTerm.trim(), 'i');
-      
-      // Find vendors that match the search term
       const vendors = await Vendor.find({ name: searchRegex });
-      const vendorIds = vendors.map((vendor) => vendor._id);
-      
-      // Find items that match the search term
+      const vendorIds = vendors.map(v => v._id);
+
       const items = await Item.find({ name: searchRegex });
-      const itemIds = items.map((item) => item._id);
-      
+      const itemIds = items.map(i => i._id);
+
       searchQuery = {
         $or: [
           { vendorId: { $in: vendorIds } },
@@ -208,42 +197,32 @@ exports.getOrdersByType = async (req, res) => {
           { 'items.itemId': { $in: itemIds } },
         ],
       };
-      
+
       console.log("Search query applied:", JSON.stringify(searchQuery));
     }
-    
-    // Combine main filter with search query
-    const finalFilter = 
+
+    const finalFilter =
       searchTerm && searchTerm.trim() !== ''
         ? { $and: [filter, searchQuery] }
         : filter;
-    
+
     console.log("Final filter applied:", JSON.stringify(finalFilter));
-    
+
     // Pagination
     const currentPage = parseInt(page) || 1;
     const itemsPerPage = parseInt(pageSize) || 10;
     const skip = (currentPage - 1) * itemsPerPage;
-    
-    console.log(`Pagination - Page: ${currentPage}, Items Per Page: ${itemsPerPage}, Skip: ${skip}`);
-    
-    // Get total count for pagination
+
     const totalCount = await IVMOrder.countDocuments(finalFilter);
     const totalPages = Math.ceil(totalCount / itemsPerPage);
-    
-    console.log("Total orders found:", totalCount);
-    
-    // Get paginated orders
+
     const orders = await IVMOrder.find(finalFilter)
       .populate('vendorId')
       .populate('items.itemId')
-      .sort({ createdAt: -1 }) // Most recent first
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(itemsPerPage);
-    
-    console.log("Orders returned:", orders.length);
-    
-    // Return orders with pagination metadata
+
     res.json({
       orders,
       pagination: {
@@ -264,53 +243,37 @@ exports.getOrdersByType = async (req, res) => {
 // Also update the purchase stats function to include search:
 exports.getPurchaseOrderStats = async (req, res) => {
   try {
+    const restaurantId = req.user?.restaurantId;
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'Missing restaurant ID in token' });
+    }
+
     const { status, dateFilter, searchTerm } = req.query;
-    
-    // Create filter object
-    const filter = { orderType: 'purchaseOrder' };
-    
-    // Filter by status
+    const filter = { orderType: 'purchaseOrder', restaurantId };
+
     if (status && status.toLowerCase() !== 'all') {
       filter.status = status;
     }
-    
-    // Apply date filtering
+
     if (dateFilter && dateFilter !== 'all') {
       const today = startOfDay(new Date());
       let startDate;
-      
       switch (dateFilter) {
-        case 'today':
-          startDate = today;
-          break;
-        case 'this week':
-          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-          break;
-        case 'this month':
-          startDate = startOfMonth(today);
-          break;
-        default:
-          startDate = null;
+        case 'today': startDate = today; break;
+        case 'this week': startDate = startOfWeek(today, { weekStartsOn: 1 }); break;
+        case 'this month': startDate = startOfMonth(today); break;
       }
-      
-      if (startDate) {
-        filter.expectedDeliveryDate = { $gte: startDate };
-      }
+      if (startDate) filter.expectedDeliveryDate = { $gte: startDate };
     }
 
-    // Search functionality
     let searchQuery = {};
     if (searchTerm && searchTerm.trim() !== '') {
       const searchRegex = new RegExp(searchTerm.trim(), 'i');
-      
-      // Find vendors that match the search term
       const vendors = await Vendor.find({ name: searchRegex });
-      const vendorIds = vendors.map(vendor => vendor._id);
-      
-      // Find items that match the search term
+      const vendorIds = vendors.map(v => v._id);
       const items = await Item.find({ name: searchRegex });
-      const itemIds = items.map(item => item._id);
-      
+      const itemIds = items.map(i => i._id);
+
       searchQuery = {
         $or: [
           { vendorId: { $in: vendorIds } },
@@ -321,219 +284,64 @@ exports.getPurchaseOrderStats = async (req, res) => {
       };
     }
 
-    // Combine main filter with search query
-    const finalFilter = searchTerm && searchTerm.trim() !== '' 
-      ? { $and: [filter, searchQuery] } 
+    const finalFilter = searchTerm?.trim()
+      ? { $and: [filter, searchQuery] }
       : filter;
 
-    // Get filtered orders
-    const purchaseOrders = await IVMOrder.find(finalFilter)
-      .populate('items.itemId');
-    
-    // Calculate statistics
-    const orderCount = purchaseOrders.length;
-    
-    let totalItems = 0;
-    let totalAmount = 0;
-    
-    // Calculate totals
+    const purchaseOrders = await IVMOrder.find(finalFilter).populate('items.itemId');
+
+    let totalItems = 0, totalAmount = 0;
     purchaseOrders.forEach(order => {
       order.items.forEach(item => {
         totalItems += item.quantity;
         totalAmount += item.price * item.quantity;
       });
     });
-    
-    res.json({
-      orderCount,
-      totalItems,
-      totalAmount: parseFloat(totalAmount.toFixed(2))
-    });
+
+    res.json({ orderCount: purchaseOrders.length, totalItems, totalAmount: +totalAmount.toFixed(2) });
   } catch (err) {
     console.error('Error fetching purchase order statistics:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Get purchase order statistics with filtering
-// exports.getPurchaseOrderStats = async (req, res) => {
-//   try {
-//     const { status, dateFilter } = req.query;
-    
-//     // Create filter object
-//     const filter = { orderType: 'purchaseOrder' };
-    
-//     // Filter by status
-//     if (status && status.toLowerCase() !== 'all') {
-//       filter.status = status;
-//     }
-    
-//     // Apply date filtering
-//     if (dateFilter && dateFilter !== 'all') {
-//       const today = startOfDay(new Date());
-//       let startDate;
-      
-//       switch (dateFilter) {
-//         case 'today':
-//           startDate = today;
-//           break;
-//         case 'this week':
-//           startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-//           break;
-//         case 'this month':
-//           startDate = startOfMonth(today);
-//           break;
-//         default:
-//           startDate = null;
-//       }
-      
-//       if (startDate) {
-//         filter.expectedDeliveryDate = { $gte: startDate };
-//       }
-//     }
-
-//     // Get filtered orders
-//     const purchaseOrders = await IVMOrder.find(filter)
-//       .populate('items.itemId');
-    
-//     // Calculate statistics
-//     const orderCount = purchaseOrders.length;
-    
-//     let totalItems = 0;
-//     let totalAmount = 0;
-    
-//     // Calculate totals
-//     purchaseOrders.forEach(order => {
-//       order.items.forEach(item => {
-//         totalItems += item.quantity;
-//         totalAmount += item.price * item.quantity;
-//       });
-//     });
-    
-//     res.json({
-//       orderCount,
-//       totalItems,
-//       totalAmount: parseFloat(totalAmount.toFixed(2))
-//     });
-//   } catch (err) {
-//     console.error('Error fetching purchase order statistics:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// Get orders by type with date filtering
-// exports.getOrdersByType = async (req, res) => {
-//   try {
-//     const { orderType } = req.params;
-//     const { status, dateFilter } = req.query;
-    
-//     if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
-//       return res.status(400).json({ message: 'Invalid order type' });
-//     }
-    
-//     // Create filter object
-//     const filter = { orderType };
-    
-//     // Filter by status
-//     if (status && status.toLowerCase() !== 'all') {
-//       filter.status = status;
-//     }
-    
-//     // Apply date filtering
-//     if (dateFilter && dateFilter !== 'all') {
-//       const today = startOfDay(new Date());
-//       let startDate;
-      
-//       switch (dateFilter) {
-//         case 'today':
-//           startDate = today;
-//           break;
-//         case 'this week':
-//           startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-//           break;
-//         case 'this month':
-//           startDate = startOfMonth(today);
-//           break;
-//         default:
-//           startDate = null;
-//       }
-      
-//       if (startDate) {
-//         filter.expectedDeliveryDate = { $gte: startDate };
-//       }
-//     }
-    
-//     const orders = await IVMOrder.find(filter)
-//       .populate('vendorId')
-//       .populate('items.itemId');
-    
-//     res.json(orders);
-//   } catch (err) {
-//     console.error('Error fetching orders by type:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
 // Get sale order statistics with filtering
 exports.getSaleOrderStats = async (req, res) => {
   try {
+    const restaurantId = req.user?.restaurantId;
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'Missing restaurant ID in token' });
+    }
+
     const { status, dateFilter } = req.query;
-    
-    // Create filter object
-    const filter = { orderType: 'saleOrder' };
-    
-    // Filter by status
+    const filter = { orderType: 'saleOrder', restaurantId };
+
     if (status && status.toLowerCase() !== 'all') {
       filter.status = status;
     }
-    
-    // Apply date filtering
+
     if (dateFilter && dateFilter !== 'all') {
       const today = startOfDay(new Date());
       let startDate;
-      
       switch (dateFilter) {
-        case 'today':
-          startDate = today;
-          break;
-        case 'this week':
-          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-          break;
-        case 'this month':
-          startDate = startOfMonth(today);
-          break;
-        default:
-          startDate = null;
+        case 'today': startDate = today; break;
+        case 'this week': startDate = startOfWeek(today, { weekStartsOn: 1 }); break;
+        case 'this month': startDate = startOfMonth(today); break;
       }
-      
-      if (startDate) {
-        filter.expectedDeliveryDate = { $gte: startDate };
-      }
+      if (startDate) filter.expectedDeliveryDate = { $gte: startDate };
     }
 
-    // Get filtered orders
-    const saleOrders = await IVMOrder.find(filter)
-      .populate('items.itemId');
-    
-    // Calculate statistics
-    const orderCount = saleOrders.length;
-    
-    let totalItems = 0;
-    let totalAmount = 0;
-    
-    // Calculate totals
+    const saleOrders = await IVMOrder.find(filter).populate('items.itemId');
+
+    let totalItems = 0, totalAmount = 0;
     saleOrders.forEach(order => {
       order.items.forEach(item => {
         totalItems += item.quantity;
         totalAmount += item.price * item.quantity;
       });
     });
-    
-    res.json({
-      orderCount,
-      totalItems,
-      totalAmount: parseFloat(totalAmount.toFixed(2))
-    });
+
+    res.json({ orderCount: saleOrders.length, totalItems, totalAmount: +totalAmount.toFixed(2) });
   } catch (err) {
     console.error('Error fetching sale order statistics:', err);
     res.status(500).json({ message: 'Server error' });
@@ -543,69 +351,45 @@ exports.getSaleOrderStats = async (req, res) => {
 // Get stockout order statistics with filtering
 exports.getStockoutOrderStats = async (req, res) => {
   try {
+    const restaurantId = req.user?.restaurantId;
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'Missing restaurant ID in token' });
+    }
+
     const { status, dateFilter } = req.query;
-    
-    // Create filter object
-    const filter = { orderType: 'stockoutOrder' };
-    
-    // Filter by status
+    const filter = { orderType: 'stockoutOrder', restaurantId };
+
     if (status && status.toLowerCase() !== 'all') {
       filter.status = status;
     }
-    
-    // Apply date filtering
+
     if (dateFilter && dateFilter !== 'all') {
       const today = startOfDay(new Date());
       let startDate;
-      
       switch (dateFilter) {
-        case 'today':
-          startDate = today;
-          break;
-        case 'this week':
-          startDate = startOfWeek(today, { weekStartsOn: 1 }); // Week starts on Monday
-          break;
-        case 'this month':
-          startDate = startOfMonth(today);
-          break;
-        default:
-          startDate = null;
+        case 'today': startDate = today; break;
+        case 'this week': startDate = startOfWeek(today, { weekStartsOn: 1 }); break;
+        case 'this month': startDate = startOfMonth(today); break;
       }
-      
-      if (startDate) {
-        filter.expectedDeliveryDate = { $gte: startDate };
-      }
+      if (startDate) filter.expectedDeliveryDate = { $gte: startDate };
     }
 
-    // Get filtered orders
-    const stockoutOrders = await IVMOrder.find(filter)
-      .populate('items.itemId');
-    
-    // Calculate statistics
-    const orderCount = stockoutOrders.length;
-    
-    let totalItems = 0;
-    let totalAmount = 0;
-    
-    // Calculate totals
+    const stockoutOrders = await IVMOrder.find(filter).populate('items.itemId');
+
+    let totalItems = 0, totalAmount = 0;
     stockoutOrders.forEach(order => {
       order.items.forEach(item => {
         totalItems += item.quantity;
         totalAmount += item.price * item.quantity;
       });
     });
-    
-    res.json({
-      orderCount,
-      totalItems,
-      totalAmount: parseFloat(totalAmount.toFixed(2))
-    });
+
+    res.json({ orderCount: stockoutOrders.length, totalItems, totalAmount: +totalAmount.toFixed(2) });
   } catch (err) {
     console.error('Error fetching stockout order statistics:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
-
 
 // Update IVM Order status
 exports.updateOrderStatus = async (req, res) => {
@@ -718,9 +502,16 @@ exports.deleteIVMOrder = async (req, res) => {
 
 exports.getOrderCounts = async (req, res) => {
   try {
-    const purchaseCount = await IVMOrder.countDocuments({ orderType: 'purchaseOrder' });
-    const saleCount = await IVMOrder.countDocuments({ orderType: 'saleOrder' });
-    const stockoutCount = await IVMOrder.countDocuments({ orderType: 'stockoutOrder' });
+    const restaurantId = req.user?.restaurantId;
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'Missing restaurant ID in token' });
+    }
+
+    const filter = { restaurantId }; // shared base filter for all types
+
+    const purchaseCount = await IVMOrder.countDocuments({ ...filter, orderType: 'purchaseOrder' });
+    const saleCount = await IVMOrder.countDocuments({ ...filter, orderType: 'saleOrder' });
+    const stockoutCount = await IVMOrder.countDocuments({ ...filter, orderType: 'stockoutOrder' });
 
     res.json({ purchase: purchaseCount, sale: saleCount, stockout: stockoutCount });
   } catch (error) {
@@ -728,6 +519,7 @@ exports.getOrderCounts = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 exports.getOrderValues = async (req, res) => {
   try {
