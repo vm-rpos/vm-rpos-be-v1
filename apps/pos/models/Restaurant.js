@@ -15,8 +15,13 @@ const restaurantSchema = new mongoose.Schema(
     },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     qrImage: {
-      type: String, // You can store the image URL or a base64 string
-      default: "",  // Optional: default to an empty string
+      type: String,
+      default: "",
+    },
+    createdBy: {  // MOVED THIS OUT OF billTracking
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
     },
     billTracking: {
       currentYear: {

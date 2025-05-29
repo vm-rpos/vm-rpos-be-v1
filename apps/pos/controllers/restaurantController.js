@@ -1,15 +1,39 @@
 const Restaurant = require("../models/Restaurant");
+const User = require("../models/User");
+const Super = require("../models/Super");
 const mongoose = require('mongoose');
-const Super=require("../models/Super");
-// Get all restaurants
+
 exports.getAllRestaurants = async (req, res) => {
   try {
-    const restaurants = await Restaurant.find().populate("categories");
+    const { userId } = req.query;
+
+    let restaurants;
+
+    if (userId) {
+      // Find the Super document for the user
+      const superUser = await Super.findOne({ user: userId }).populate({
+        path: "createdRestaurants",
+        populate: { path: "categories" }
+      });
+
+      if (!superUser) {
+        return res.status(404).json({ error: "Super not found for this user" });
+      }
+
+      restaurants = superUser.createdRestaurants;
+    } else {
+      // No userId, return all restaurants
+      restaurants = await Restaurant.find().populate("categories");
+    }
+
     res.json(restaurants);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error in getAllRestaurants:", err);
+    res.status(500).json({ error: "Server error while fetching restaurants" });
   }
 };
+
+
 
 // Get a single restaurant by ID
 exports.getRestaurantById = async (req, res) => {
@@ -24,14 +48,64 @@ exports.getRestaurantById = async (req, res) => {
   }
 };
 
-// Create a new restaurant
+// controllers/restaurantController.js
 exports.createRestaurant = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const newRestaurant = new Restaurant({...req.body, qrImage: req.body.qrImage || "",});
-    await newRestaurant.save();
-    res.status(201).json(newRestaurant);
+    const userId = req.userId || req.body.userId;
+    
+    // Validate userId
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error('Invalid user ID');
+    }
+
+    // Create restaurant
+    const newRestaurant = new Restaurant({
+      ...req.body,
+      qrImage: req.body.qrImage || "",
+      createdBy: userId
+    });
+
+    await newRestaurant.save({ session });
+
+    // Update User
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { restaurantIds: newRestaurant._id } },
+      { new: true, session }
+    );
+
+    // Update Super - just push the restaurant ID
+    await Super.findOneAndUpdate(
+      { user: userId },
+      { 
+        $addToSet: { createdRestaurants: newRestaurant._id },
+        $setOnInsert: { user: userId }
+      },
+      { upsert: true, new: true, session }
+    );
+
+    await session.commitTransaction();
+    
+    const populatedRestaurant = await Restaurant.findById(newRestaurant._id)
+      .populate('createdBy', 'firstname lastname email');
+      
+    res.status(201).json({
+      success: true,
+      data: populatedRestaurant
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    await session.abortTransaction();
+    console.error('Restaurant creation error:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message,
+      message: "Failed to create restaurant" 
+    });
+  } finally {
+    session.endSession();
   }
 };
 

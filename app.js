@@ -23,6 +23,7 @@ const authRoutes = require("./apps/pos/routes/authRoutes");
 const storeRoutes = require("./apps/inventory/routes/storeRoutes");
 
 const usersRoutes = require("./apps/pos/routes/usersRoutes");
+const superroutes = require("./apps/pos/routes/superRoutes");
 
 require("dotenv").config();
 const app = express();
@@ -52,6 +53,7 @@ app.use("/api/tags", tagRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/sections", sectionRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/super", superroutes);
 
 // Inventory API Routes
 app.use("/api-ivm/categories", categoryIvmRoutes); //done
