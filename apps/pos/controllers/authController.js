@@ -24,7 +24,7 @@ exports.signup = async (req, res) => {
     }
     
     // Validate role
-    if (!role || !["admin", "pos","ivm"].includes(role)) {
+    if (!role || !["admin", "pos","ivm","superadmin","salesadmin"].includes(role)) {
       console.log("Signup failed: Invalid role");
       return res.status(400).json({ error: "Role must be either 'admin' or 'pos' or 'ivm' " });
     }

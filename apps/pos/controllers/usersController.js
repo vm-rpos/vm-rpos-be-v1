@@ -91,7 +91,7 @@ exports.editUserById = async (req, res) => {
     }
 
     // Validate and update role
-    if (role && !["admin", "pos", "ivm"].includes(role)) {
+    if (role && !["admin", "pos", "ivm","superadmin","salesadmin"].includes(role)) {
       return res.status(400).json({ error: "Role must be either 'admin', 'pos', or 'ivm'" });
     }
 

@@ -6,9 +6,9 @@ const UserSchema = new mongoose.Schema({
   phonenumber: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  restaurantId: { type: String, required: true },
+  restaurantId: { type: String },
   pin: { type: String, required: true },
-  role: { type: String, enum: ["admin", "pos","ivm"], required: true },
+  role: { type: String, enum: ["admin", "pos","ivm","superadmin","salesadmin"], required: true },
   tokens: [{
     accessToken: { type: String },
     refreshToken: { type: String },

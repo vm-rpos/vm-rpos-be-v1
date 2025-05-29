@@ -1,6 +1,6 @@
 const Restaurant = require("../models/Restaurant");
 const mongoose = require('mongoose');
-
+const Super=require("../models/Super");
 // Get all restaurants
 exports.getAllRestaurants = async (req, res) => {
   try {
