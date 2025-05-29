@@ -9,70 +9,7 @@ const MAX_TOKENS_PER_USER = process.env.MAX_TOKENS_PER_USER || 5; // Maximum num
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "Kedhareswarmatha";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "Kedhareswarmatha";
 
-// Update user details (excluding restaurantId and tokens)
-exports.updateUser = async (req, res) => {
-  try {
-    const { userId } = req.params; // User ID from the route
-    const {
-      firstname,
-      lastname,
-      phonenumber,
-      email,
-      password,
-      pin,
-      role
-    } = req.body;
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    // Validate and update PIN if provided
-    if (pin) {
-      if (!/^\d{4}$/.test(pin)) {
-        return res.status(400).json({ error: "PIN must be a 4-digit number" });
-      }
-      const hashedPin = await bcrypt.hash(pin, 10);
-      user.pin = hashedPin;
-    }
-
-    // Validate and update role
-    if (role && !["admin", "pos","ivm"].includes(role)) {
-      return res.status(400).json({ error: "Role must be either 'admin' or 'pos'or 'ivm' " });
-    }
-
-    // Update password if provided
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      user.password = hashedPassword;
-    }
-
-    // Update other fields
-    if (firstname) user.firstname = firstname;
-    if (lastname) user.lastname = lastname;
-    if (phonenumber) user.phonenumber = phonenumber;
-    if (email) user.email = email;
-    if (role) user.role = role;
-
-    await user.save();
-
-    res.json({
-      message: "User updated successfully",
-      user: {
-        _id: user._id,
-        firstname: user.firstname,
-        lastname: user.lastname,
-        email: user.email,
-        phonenumber: user.phonenumber,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error("Update user error:", error.message);
-    res.status(500).json({ error: error.message });
-  }
-};
 
 // User Signup
 exports.signup = async (req, res) => {

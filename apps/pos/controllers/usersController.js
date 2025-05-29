@@ -1,6 +1,7 @@
 const Restaurant = require("../models/Restaurant");
 const User = require("../models/User");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 // Get all users by restaurant ID
 exports.getUsersByRestaurant = async (req, res) => {
@@ -61,38 +62,68 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// Edit user by ID
+// Update user details (excluding restaurantId and tokens)
 exports.editUserById = async (req, res) => {
   try {
-    const { firstname, lastname, role, phonenumber, email } = req.body;
-    
-    const updatedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      { firstname, lastname, role, phonenumber, email },
-      { new: true, runValidators: true }
-    );
+    const { id: userId } = req.params; // User ID from the route
+    const {
+      firstname,
+      lastname,
+      phonenumber,
+      email,
+      password,
+      pin,
+      role
+    } = req.body;
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
+    // Validate and update PIN if provided
+    if (pin) {
+      if (!/^\d{4}$/.test(pin)) {
+        return res.status(400).json({ error: "PIN must be a 4-digit number" });
+      }
+      const hashedPin = await bcrypt.hash(pin, 10);
+      user.pin = hashedPin;
+    }
+
+    // Validate and update role
+    if (role && !["admin", "pos", "ivm"].includes(role)) {
+      return res.status(400).json({ error: "Role must be either 'admin', 'pos', or 'ivm'" });
+    }
+
+    // Update password if provided
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      user.password = hashedPassword;
+    }
+
+    // Update other fields
+    if (firstname) user.firstname = firstname;
+    if (lastname) user.lastname = lastname;
+    if (phonenumber) user.phonenumber = phonenumber;
+    if (email) user.email = email;
+    if (role) user.role = role;
+
+    await user.save();
+
     res.json({
-      success: true,
       message: "User updated successfully",
       user: {
-        id: updatedUser._id,
-        firstname: updatedUser.firstname,
-        lastname: updatedUser.lastname,
-        role: updatedUser.role,
-        phonenumber: updatedUser.phonenumber,
-        email: updatedUser.email
+        _id: user._id,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        email: user.email,
+        phonenumber: user.phonenumber,
+        role: user.role
       }
     });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+  } catch (error) {
+    console.error("Update user error:", error.message);
+    res.status(500).json({ error: error.message });
   }
 };
 
