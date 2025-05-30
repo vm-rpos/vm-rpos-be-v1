@@ -88,10 +88,7 @@ exports.editUserById = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Check if user is verified before allowing updates
-    if (!user.isEmailVerified || !user.isActive) {
-      return res.status(400).json({ error: "Cannot update unverified user account" });
-    }
+  
 
     // If email is being changed, require re-verification
     if (email && email !== user.email) {

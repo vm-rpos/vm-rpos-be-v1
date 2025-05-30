@@ -23,11 +23,8 @@ exports.getAllRestaurants = async (req, res) => {
         ],
       });
 
-      if (!superUser) {
-        return res.status(404).json({ error: "Super not found for this user" });
-      }
-
-      restaurants = superUser.createdRestaurants;
+      // If no superUser found, return empty array instead of error
+      restaurants = superUser?.createdRestaurants || [];
     } else {
       // No userId, return all restaurants
       restaurants = await Restaurant.find().populate("categories").populate({
@@ -42,9 +39,8 @@ exports.getAllRestaurants = async (req, res) => {
       restaurants.map(async (restaurant) => {
         // Handle cases where createdBy might not be populated
         let creatorName = "System";
-        let id=restaurant.createdBy;
         if (restaurant.createdBy) {
-          restaurant.userid=restaurant.createdBy._id;
+          restaurant.userid = restaurant.createdBy._id;
           if (typeof restaurant.createdBy === "object") {
             // If populated, use firstname + lastname
             creatorName = `${restaurant.createdBy.firstname || ""} ${
@@ -67,11 +63,9 @@ exports.getAllRestaurants = async (req, res) => {
           location: {
             address: restaurant.location?.address,
             city: restaurant.location?.city,
+            zip: restaurant.location?.zip,
             state: restaurant.location?.state,
-            fullLocation:
-              [restaurant.location?.city, restaurant.location?.state]
-                .filter(Boolean)
-                .join(", ") || "N/A",
+            
           },
           contact: {
             phone: restaurant.contact?.phone,
@@ -79,9 +73,8 @@ exports.getAllRestaurants = async (req, res) => {
             primaryContact:
               restaurant.contact?.phone || restaurant.contact?.email || "N/A",
           },
-           createdById: restaurant.userid,
-           createdBy: restaurant.createdBy,
-
+          createdById: restaurant.userid,
+          createdBy: restaurant.createdBy,
           createdAt: restaurant.createdAt,
           dailyOrders: restaurant.billTracking?.dailyOrderCounter || 0,
           qrImage: restaurant.qrImage || "",
@@ -212,21 +205,42 @@ exports.uploadQrImage = async (req, res) => {
 // Update a restaurant
 exports.updateRestaurant = async (req, res) => {
   try {
-    const updatedRestaurant = await Restaurant.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-      }
-    );
-    if (!updatedRestaurant) {
+    const restaurant = await Restaurant.findById(req.params.id);
+
+    if (!restaurant) {
       return res.status(404).json({ message: "Restaurant not found" });
     }
-    res.json(updatedRestaurant);
+
+    // Only update non-empty fields
+    const updateFields = req.body;
+
+    for (const key in updateFields) {
+      const value = updateFields[key];
+
+      // Handle nested objects like location and contact
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        for (const nestedKey in value) {
+          if (value[nestedKey] !== undefined && value[nestedKey] !== '') {
+            restaurant[key][nestedKey] = value[nestedKey];
+          }
+        }
+      } else {
+        // For top-level fields
+        if (value !== undefined && value !== '') {
+          restaurant[key] = value;
+        }
+      }
+    }
+
+    await restaurant.save();
+
+    res.json(restaurant);
   } catch (err) {
+    console.error("Error in updateRestaurant:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // Delete a restaurant
 exports.deleteRestaurant = async (req, res) => {

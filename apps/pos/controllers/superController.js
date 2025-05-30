@@ -16,7 +16,7 @@ const getSuperByUserId = async (req, res) => {
       });
 
     if (!superUser) {
-      return res.status(404).json({ message: 'data not found for this user ' });
+      return res.status(200).json([]); // Return empty array instead of 404
     }
 
     res.status(200).json(superUser);
