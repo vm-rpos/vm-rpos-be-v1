@@ -1,7 +1,7 @@
 const Restaurant = require("../models/Restaurant");
 const User = require("../models/User");
 const Super = require("../models/Super");
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 exports.getAllRestaurants = async (req, res) => {
   try {
@@ -13,7 +13,14 @@ exports.getAllRestaurants = async (req, res) => {
       // Find the Super document for the user
       const superUser = await Super.findOne({ user: userId }).populate({
         path: "createdRestaurants",
-        populate: { path: "categories" }
+        populate: [
+          { path: "categories" },
+          {
+            path: "createdBy",
+            select: "firstname lastname",
+            model: User,
+          },
+        ],
       });
 
       if (!superUser) {
@@ -23,22 +30,83 @@ exports.getAllRestaurants = async (req, res) => {
       restaurants = superUser.createdRestaurants;
     } else {
       // No userId, return all restaurants
-      restaurants = await Restaurant.find().populate("categories");
+      restaurants = await Restaurant.find().populate("categories").populate({
+        path: "createdBy",
+        select: "firstname lastname",
+        model: User,
+      });
     }
 
-    res.json(restaurants);
+    // Transform data for optimized response
+    const response = await Promise.all(
+      restaurants.map(async (restaurant) => {
+        // Handle cases where createdBy might not be populated
+        let creatorName = "System";
+        let id=restaurant.createdBy;
+        if (restaurant.createdBy) {
+          restaurant.userid=restaurant.createdBy._id;
+          if (typeof restaurant.createdBy === "object") {
+            // If populated, use firstname + lastname
+            creatorName = `${restaurant.createdBy.firstname || ""} ${
+              restaurant.createdBy.lastname || ""
+            }`.trim();
+          } else if (mongoose.Types.ObjectId.isValid(restaurant.createdBy)) {
+            // If it's just an ObjectId, fetch the user
+            const user = await User.findById(restaurant.createdBy)
+              .select("firstname lastname")
+              .lean();
+            creatorName = user
+              ? `${user.firstname || ""} ${user.lastname || ""}`.trim()
+              : "Unknown User";
+          }
+        }
+
+        return {
+          id: restaurant._id,
+          name: restaurant.name,
+          location: {
+            address: restaurant.location?.address,
+            city: restaurant.location?.city,
+            state: restaurant.location?.state,
+            fullLocation:
+              [restaurant.location?.city, restaurant.location?.state]
+                .filter(Boolean)
+                .join(", ") || "N/A",
+          },
+          contact: {
+            phone: restaurant.contact?.phone,
+            email: restaurant.contact?.email,
+            primaryContact:
+              restaurant.contact?.phone || restaurant.contact?.email || "N/A",
+          },
+           createdById: restaurant.userid,
+           createdBy: restaurant.createdBy,
+
+          createdAt: restaurant.createdAt,
+          dailyOrders: restaurant.billTracking?.dailyOrderCounter || 0,
+          qrImage: restaurant.qrImage || "",
+          lastReset: restaurant.billTracking?.lastResetDate,
+          categories: restaurant.categories || [],
+        };
+      })
+    );
+
+    res.json(response);
   } catch (err) {
     console.error("Error in getAllRestaurants:", err);
-    res.status(500).json({ error: "Server error while fetching restaurants" });
+    res.status(500).json({
+      error: "Server error while fetching restaurants",
+      details: err.message,
+    });
   }
 };
-
-
 
 // Get a single restaurant by ID
 exports.getRestaurantById = async (req, res) => {
   try {
-    const restaurant = await Restaurant.findById(req.params.id).populate("categories");
+    const restaurant = await Restaurant.findById(req.params.id).populate(
+      "categories"
+    );
     if (!restaurant) {
       return res.status(404).json({ message: "Restaurant not found" });
     }
@@ -55,17 +123,17 @@ exports.createRestaurant = async (req, res) => {
 
   try {
     const userId = req.userId || req.body.userId;
-    
+
     // Validate userId
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      throw new Error('Invalid user ID');
+      throw new Error("Invalid user ID");
     }
 
     // Create restaurant
     const newRestaurant = new Restaurant({
       ...req.body,
       qrImage: req.body.qrImage || "",
-      createdBy: userId
+      createdBy: userId,
     });
 
     await newRestaurant.save({ session });
@@ -80,29 +148,30 @@ exports.createRestaurant = async (req, res) => {
     // Update Super - just push the restaurant ID
     await Super.findOneAndUpdate(
       { user: userId },
-      { 
+      {
         $addToSet: { createdRestaurants: newRestaurant._id },
-        $setOnInsert: { user: userId }
+        $setOnInsert: { user: userId },
       },
       { upsert: true, new: true, session }
     );
 
     await session.commitTransaction();
-    
-    const populatedRestaurant = await Restaurant.findById(newRestaurant._id)
-      .populate('createdBy', 'firstname lastname email');
-      
+
+    const populatedRestaurant = await Restaurant.findById(
+      newRestaurant._id
+    ).populate("createdBy", "firstname lastname email");
+
     res.status(201).json({
       success: true,
-      data: populatedRestaurant
+      data: populatedRestaurant,
     });
   } catch (err) {
     await session.abortTransaction();
-    console.error('Restaurant creation error:', err);
-    res.status(500).json({ 
+    console.error("Restaurant creation error:", err);
+    res.status(500).json({
       success: false,
       error: err.message,
-      message: "Failed to create restaurant" 
+      message: "Failed to create restaurant",
     });
   } finally {
     session.endSession();
@@ -116,7 +185,9 @@ exports.uploadQrImage = async (req, res) => {
     return res.status(400).json({ message: "No image file uploaded" });
   }
 
-  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
+    req.file.filename
+  }`;
 
   try {
     // Update the restaurant's qrImage field with the uploaded image URL
@@ -141,9 +212,13 @@ exports.uploadQrImage = async (req, res) => {
 // Update a restaurant
 exports.updateRestaurant = async (req, res) => {
   try {
-    const updatedRestaurant = await Restaurant.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
+    const updatedRestaurant = await Restaurant.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+      }
+    );
     if (!updatedRestaurant) {
       return res.status(404).json({ message: "Restaurant not found" });
     }
@@ -167,7 +242,7 @@ exports.deleteRestaurant = async (req, res) => {
 };
 
 //Get restaurant name during login
-exports.getRestaurantName =  async(req,res)=>{
+exports.getRestaurantName = async (req, res) => {
   try {
     const restaurant = await Restaurant.findById(req.params.id);
     if (!restaurant) {
@@ -177,6 +252,4 @@ exports.getRestaurantName =  async(req,res)=>{
   } catch (error) {
     res.status(500).json({ message: "Error fetching restaurant data" });
   }
-}
-
-
+};
