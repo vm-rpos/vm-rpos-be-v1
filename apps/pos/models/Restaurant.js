@@ -18,7 +18,7 @@ const restaurantSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    createdBy: {  // MOVED THIS OUT OF billTracking
+    createdBy: { 
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true

@@ -14,6 +14,11 @@ const UserSchema = new mongoose.Schema({
     refreshToken: { type: String },
     createdAt: { type: Date, default: Date.now }
   }],
+  // Email verification fields
+  isEmailVerified: { type: Boolean, default: false },
+  emailVerificationCode: { type: String },
+  emailVerificationExpiry: { type: Date },
+  isActive: { type: Boolean, default: false }, // User becomes active only after email verification
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", UserSchema);

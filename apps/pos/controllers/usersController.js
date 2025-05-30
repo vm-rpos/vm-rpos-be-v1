@@ -3,7 +3,7 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
-// Get all users by restaurant ID
+// Get all users by restaurant ID (only active/verified users)
 exports.getUsersByRestaurant = async (req, res) => {
   try {
     const restaurant = await Restaurant.findById(req.params.restaurantId);
@@ -11,7 +11,10 @@ exports.getUsersByRestaurant = async (req, res) => {
       return res.status(404).json({ message: "Restaurant not found" });
     }
 
-    const users = await User.find({ restaurantId: req.params.restaurantId });
+    const users = await User.find({ 
+      restaurantId: req.params.restaurantId,
+     
+    });
 
     const filteredUsers = users.map(user => ({
       id: user._id,
@@ -19,7 +22,9 @@ exports.getUsersByRestaurant = async (req, res) => {
       lastname: user.lastname,
       role: user.role,
       phonenumber: user.phonenumber,
-      email: user.email
+      email: user.email,
+      isEmailVerified: user.isEmailVerified,
+      isActive: user.isActive
     }));
 
     res.json({
@@ -51,7 +56,9 @@ exports.getUserById = async (req, res) => {
         lastname: user.lastname,
         role: user.role,
         phonenumber: user.phonenumber,
-        email: user.email
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+        isActive: user.isActive
       }
     });
   } catch (err) {
@@ -65,7 +72,7 @@ exports.getUserById = async (req, res) => {
 // Update user details (excluding restaurantId and tokens)
 exports.editUserById = async (req, res) => {
   try {
-    const { id: userId } = req.params; // User ID from the route
+    const { id: userId } = req.params;
     const {
       firstname,
       lastname,
@@ -81,6 +88,24 @@ exports.editUserById = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if user is verified before allowing updates
+    if (!user.isEmailVerified || !user.isActive) {
+      return res.status(400).json({ error: "Cannot update unverified user account" });
+    }
+
+    // If email is being changed, require re-verification
+    if (email && email !== user.email) {
+      const emailExists = await User.findOne({ email, _id: { $ne: userId } });
+      if (emailExists) {
+        return res.status(400).json({ error: "Email already in use by another user" });
+      }
+      
+      // Mark email as unverified if changed
+      user.isEmailVerified = false;
+      user.isActive = false;
+      // Note: You might want to implement a separate email change verification flow
+    }
+
     // Validate and update PIN if provided
     if (pin) {
       if (!/^\d{4}$/.test(pin)) {
@@ -92,7 +117,7 @@ exports.editUserById = async (req, res) => {
 
     // Validate and update role
     if (role && !["admin", "pos", "ivm","superadmin","salesadmin"].includes(role)) {
-      return res.status(400).json({ error: "Role must be either 'admin', 'pos', or 'ivm'" });
+      return res.status(400).json({ error: "Role must be either 'admin', 'pos', 'ivm'" });
     }
 
     // Update password if provided
@@ -111,14 +136,18 @@ exports.editUserById = async (req, res) => {
     await user.save();
 
     res.json({
-      message: "User updated successfully",
+      message: email && email !== user.email ? 
+        "User updated successfully. Email verification required for new email." : 
+        "User updated successfully",
       user: {
         _id: user._id,
         firstname: user.firstname,
         lastname: user.lastname,
         email: user.email,
         phonenumber: user.phonenumber,
-        role: user.role
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        isActive: user.isActive
       }
     });
   } catch (error) {
