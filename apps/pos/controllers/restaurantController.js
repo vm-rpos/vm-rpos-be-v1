@@ -60,6 +60,7 @@ exports.getAllRestaurants = async (req, res) => {
         return {
           id: restaurant._id,
           name: restaurant.name,
+          shortName: restaurant.shortName || "restaurant",
           location: {
             address: restaurant.location?.address,
             city: restaurant.location?.city,
