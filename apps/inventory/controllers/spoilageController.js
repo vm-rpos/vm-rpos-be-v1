@@ -23,7 +23,6 @@ exports.getAllSpoilageRecords = async (req, res) => {
     const spoilageRecords = await Spoilage.find(filter)
       .populate("itemId", "name price")
       .populate("categoryId", "name")
-      .populate("reportedBy", "name email")
       .populate("vendorId", "name")
       .sort({ spoilDate: -1 });
 
@@ -44,16 +43,17 @@ exports.createSpoilageRecord = async (req, res) => {
       notes,
       vendorId,
       imageUrl,
+      reportedBy,
+      
     } = req.body;
 
     // ✅ Correctly assign restaurantId from the user object
     const restaurantId = req.user.restaurantId;
-    const reportedBy = req.user._id;
 
     // ✅ Validate required fields
-    if (!itemId || !spoiledQuantity || !reason) {
+    if (!itemId || !spoiledQuantity || !reason ) {
       return res.status(400).json({
-        message: "Item ID, spoiled quantity, and reason are required",
+        message: "Item ID, spoiled quantity, reason are required",
       });
     }
 
@@ -88,11 +88,11 @@ exports.createSpoilageRecord = async (req, res) => {
       price: item.price,
       reason,
       notes: notes || "",
-      reportedBy,
+      reportedBy, // Now using the name from request body
       vendorId,
       imageUrl,
     });
-    console.log(spoilageRecord);
+
     await spoilageRecord.save();
 
     // ✅ Reduce the item quantity
@@ -100,11 +100,10 @@ exports.createSpoilageRecord = async (req, res) => {
       $inc: { quantity: -spoiledQuantity },
     });
 
-    // ✅ Populate the spoilage record
+    // ✅ Populate the spoilage record (remove reportedBy population since it's now a string)
     const populatedRecord = await Spoilage.findById(spoilageRecord._id)
       .populate("itemId", "name price")
       .populate("categoryId", "name")
-      .populate("reportedBy", "name email")
       .populate("vendorId", "name");
 
     res.status(201).json(populatedRecord);
@@ -138,104 +137,9 @@ exports.getSpoilageRecordById = async (req, res) => {
   }
 };
 
-// Update spoilage record
-exports.updateSpoilageRecord = async (req, res) => {
-  try {
-    const {
-      reason,
-      notes,
-      vendorId,
-      imageUrl,
-    } = req.body;
 
-    const restaurantId = req.user.restaurantId;
 
-    const spoilageRecord = await Spoilage.findOne({
-      _id: req.params.id,
-      restaurantId,
-    });
 
-    if (!spoilageRecord) {
-      return res.status(404).json({ message: "Spoilage record not found" });
-    }
-
-    const updateData = {};
-    if (reason !== undefined) updateData.reason = reason;
-    if (notes !== undefined) updateData.notes = notes;
-    if (vendorId !== undefined) updateData.vendorId = vendorId;
-    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
-
-    const updatedRecord = await Spoilage.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    )
-      .populate("itemId", "name price")
-      .populate("categoryId", "name")
-      .populate("reportedBy", "name email")
-      .populate("vendorId", "name");
-
-    res.json(updatedRecord);
-  } catch (err) {
-    console.error("Error updating spoilage record:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// Approve or reject spoilage record
-exports.approveSpoilageRecord = async (req, res) => {
-  try {
-    const { status, approvalNotes } = req.body; // status: 'Approved' or 'Rejected'
-    const restaurantId = req.user.restaurantId;
-
-    if (!["Approved", "Rejected"].includes(status)) {
-      return res.status(400).json({
-        message: "Status must be either Approved or Rejected",
-      });
-    }
-
-    const spoilageRecord = await Spoilage.findOne({
-      _id: req.params.id,
-      restaurantId,
-    });
-
-    if (!spoilageRecord) {
-      return res.status(404).json({ message: "Spoilage record not found" });
-    }
-
-    if (spoilageRecord.status !== "Pending") {
-      return res.status(400).json({
-        message: "Spoilage record has already been processed",
-      });
-    }
-
-    // If rejecting, restore the item quantity
-    if (status === "Rejected") {
-      await Item.findByIdAndUpdate(spoilageRecord.itemId, {
-        $inc: { quantity: spoilageRecord.spoiledQuantity },
-      });
-    }
-
-    const updatedRecord = await Spoilage.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        isApproved: status === "Approved",
-        notes: approvalNotes || spoilageRecord.notes,
-      },
-      { new: true }
-    )
-      .populate("itemId", "name price")
-      .populate("categoryId", "name")
-      .populate("reportedBy", "name email")
-      .populate("vendorId", "name");
-
-    res.json(updatedRecord);
-  } catch (err) {
-    console.error("Error approving spoilage record:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
 // Delete spoilage record
 exports.deleteSpoilageRecord = async (req, res) => {
@@ -261,89 +165,6 @@ exports.deleteSpoilageRecord = async (req, res) => {
     res.json({ message: "Spoilage record deleted successfully" });
   } catch (err) {
     console.error("Error deleting spoilage record:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// Get spoilage analytics
-exports.getSpoilageAnalytics = async (req, res) => {
-  try {
-    const restaurantId = req.user.restaurantId;
-    const { startDate, endDate } = req.query;
-
-    // Build date filter
-    const dateFilter = { restaurantId, status: "Approved" };
-    if (startDate || endDate) {
-      dateFilter.spoilDate = {};
-      if (startDate) dateFilter.spoilDate.$gte = new Date(startDate);
-      if (endDate) dateFilter.spoilDate.$lte = new Date(endDate);
-    }
-
-    // Total loss value
-    const totalLossResult = await Spoilage.aggregate([
-      { $match: dateFilter },
-      { $group: { _id: null, totalLoss: { $sum: "$totalLossValue" } } },
-    ]);
-
-    // Spoilage by reason
-    const spoilageByReason = await Spoilage.aggregate([
-      { $match: dateFilter },
-      {
-        $group: {
-          _id: "$reason",
-          count: { $sum: 1 },
-          totalLoss: { $sum: "$totalLossValue" },
-        },
-      },
-      { $sort: { count: -1 } },
-    ]);
-
-    // Spoilage by category
-    const spoilageByCategory = await Spoilage.aggregate([
-      { $match: dateFilter },
-      {
-        $lookup: {
-          from: "categories",
-          localField: "categoryId",
-          foreignField: "_id",
-          as: "category",
-        },
-      },
-      { $unwind: "$category" },
-      {
-        $group: {
-          _id: "$category.name",
-          count: { $sum: 1 },
-          totalLoss: { $sum: "$totalLossValue" },
-        },
-      },
-      { $sort: { count: -1 } },
-    ]);
-
-    // Top spoiled items
-    const topSpoiledItems = await Spoilage.aggregate([
-      { $match: dateFilter },
-      {
-        $group: {
-          _id: "$itemId",
-          itemName: { $first: "$itemName" },
-          count: { $sum: 1 },
-          totalLoss: { $sum: "$totalLossValue" },
-          totalQuantity: { $sum: "$spoiledQuantity" },
-        },
-      },
-      { $sort: { count: -1 } },
-      { $limit: 10 },
-    ]);
-
-    res.json({
-      totalLoss: totalLossResult[0]?.totalLoss || 0,
-      spoilageByReason,
-      spoilageByCategory,
-      topSpoiledItems,
-    });
-  } catch (err) {
-    console.error("Error getting spoilage analytics:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

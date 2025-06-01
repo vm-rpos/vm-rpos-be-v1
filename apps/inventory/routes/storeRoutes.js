@@ -12,3 +12,4 @@ router.get('/total-store-value', storeController.getTotalStoreValue);
 router.get('/order-values', storeController.getOrderValues);
 
 module.exports = router;
+

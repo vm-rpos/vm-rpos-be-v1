@@ -41,19 +41,7 @@ const SpoilageSchema = new mongoose.Schema({
   },
   reason: {
     type: String,
-    enum: [
-      'Expired',
-      'Damaged in Transit',
-      'Contaminated',
-      'Improper Storage',
-      'Broken Packaging',
-      'Recall',
-      'Human Error',
-      'Spoiled',
-      'Temperature Abuse',
-      'Pest Infestation',
-      'Other'
-    ],
+  
     required: true
   },
   notes: {
@@ -62,8 +50,8 @@ const SpoilageSchema = new mongoose.Schema({
     trim: true
   },
   reportedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
+    default:'',
     required: false
   },
   vendorId: {
