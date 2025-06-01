@@ -21,6 +21,7 @@ const itemIvmRoutes = require("./apps/inventory/routes/itemIvmRoutes");
 const ivmRoutes = require("./apps/inventory/routes/ivmRoutes");
 const authRoutes = require("./apps/pos/routes/authRoutes");
 const storeRoutes = require("./apps/inventory/routes/storeRoutes");
+const spoilageRoutes = require("./apps/inventory/routes/spoilageRoutes");
 
 const usersRoutes = require("./apps/pos/routes/usersRoutes");
 const superroutes = require("./apps/pos/routes/superRoutes");
@@ -61,6 +62,7 @@ app.use("/api-ivm/tags", tagIvmRoutes); //done
 app.use("/api-ivm/vendors", vendorIvmRoutes); //done
 app.use("/api-ivm/orders", ivmRoutes); //done
 app.use("/api-ivm/items", itemIvmRoutes); //done
+app.use("/api-ivm/spoilage", spoilageRoutes); //spoilage management
 app.use("/api-ivm", storeRoutes);
 
 //Auth Routes
