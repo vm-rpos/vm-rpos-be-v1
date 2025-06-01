@@ -113,7 +113,7 @@ exports.deleteIvmCategory = async (req, res) => {
 // Add item to category with tag handling
 exports.addItemToIvmCategory = async (req, res) => {
   try {
-    const { name, price, description, tags } = req.body;
+    const { name, price, description, tags ,quantity} = req.body;
     const restaurantId = req.user.restaurantId; // ✅ Get restaurantId from token
 
     if (!name || price === undefined) {
@@ -147,6 +147,7 @@ exports.addItemToIvmCategory = async (req, res) => {
     const newItem = new Item({
       name,
       price,
+      quantity,
       description: description || '',
       tags: tagIds,
       categoryId: category._id,
@@ -168,7 +169,7 @@ exports.addItemToIvmCategory = async (req, res) => {
 // Update item in category with tag handling
 exports.updateItemInIvmCategory = async (req, res) => {
   try {
-    const { name, price, description, tags } = req.body;
+    const { name, price, description, quantity,tags } = req.body;
     if (!name || price === undefined) return res.status(400).json({ message: 'Item name and price are required' });
 
     const category = await Category.findById(req.params.categoryId);
@@ -204,6 +205,7 @@ exports.updateItemInIvmCategory = async (req, res) => {
       price, 
       description: description !== undefined ? description : item.description,
       tags: tagIds,
+      quantity,
       categoryName: category.name 
     });
 
