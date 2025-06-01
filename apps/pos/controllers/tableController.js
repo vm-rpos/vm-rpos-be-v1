@@ -1,8 +1,8 @@
-const Table = require('../models/Table');
-const Order = require('../models/Order');
-const Section = require('../models/Section');
-const waiter = require('../models/Waiter');
-const Restaurant = require('../models/Restaurant'); // Assuming you have a Restaurant model 
+const Table = require("../models/Table");
+const Order = require("../models/Order");
+const Section = require("../models/Section");
+const waiter = require("../models/Waiter");
+const Restaurant = require("../models/Restaurant"); // Assuming you have a Restaurant model
 
 // Get all tables with their order information
 // exports.getAllTables = async (req, res) => {
@@ -40,7 +40,9 @@ exports.getAllTables = async (req, res) => {
     const restaurantId = req.user?.restaurantId;
 
     if (!restaurantId) {
-      return res.status(403).json({ message: "Unauthorized: Restaurant ID missing in token" });
+      return res
+        .status(403)
+        .json({ message: "Unauthorized: Restaurant ID missing in token" });
     }
 
     const tables = await Table.find({ restaurantId }).sort({ tableNumber: 1 });
@@ -50,8 +52,7 @@ exports.getAllTables = async (req, res) => {
         const latestOrder = await Order.findOne({
           tableId: table._id,
           status: "pending",
-            isDeleted: { $ne: true },  // 👈 ignore deleted orders
-
+          isDeleted: { $ne: true }, // 👈 ignore deleted orders
         }).sort({ createdAt: -1 });
 
         return {
@@ -87,15 +88,21 @@ exports.createTable = async (req, res) => {
     const { name, tableNumber, sectionId, seats } = req.body;
 
     if (!name || !tableNumber || !sectionId || !seats) {
-      return res.status(400).json({ message: "Table name, number, sectionId, and seats are required" });
+      return res.status(400).json({
+        message: "Table name, number, sectionId, and seats are required",
+      });
     }
 
     if (isNaN(tableNumber) || isNaN(seats)) {
-      return res.status(400).json({ message: "Table number and seats must be numeric" });
+      return res
+        .status(400)
+        .json({ message: "Table number and seats must be numeric" });
     }
 
     if (!req.user?.restaurantId) {
-      return res.status(403).json({ message: "User does not have a valid restaurantId" });
+      return res
+        .status(403)
+        .json({ message: "User does not have a valid restaurantId" });
     }
 
     const sectionExists = await Section.findById(sectionId);
@@ -117,7 +124,7 @@ exports.createTable = async (req, res) => {
       hasOrders: false,
       restaurantId: req.user.restaurantId,
       sectionId,
-      seats: parseInt(seats)
+      seats: parseInt(seats),
     });
 
     const savedTable = await newTable.save();
@@ -125,11 +132,13 @@ exports.createTable = async (req, res) => {
     res.status(201).json({
       success: true,
       data: savedTable,
-      message: "Table created successfully"
+      message: "Table created successfully",
     });
   } catch (err) {
     console.error("Error creating table:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 };
 
@@ -139,7 +148,9 @@ exports.updateTable = async (req, res) => {
     const { name, tableNumber, sectionId, seats } = req.body;
 
     if (!name && !tableNumber && !sectionId && !seats) {
-      return res.status(400).json({ message: 'At least one field must be provided' });
+      return res
+        .status(400)
+        .json({ message: "At least one field must be provided" });
     }
 
     const updateData = {};
@@ -160,17 +171,24 @@ exports.updateTable = async (req, res) => {
     if (sectionId) updateData.sectionId = sectionId;
     if (seats) {
       if (isNaN(seats) || seats <= 0) {
-        return res.status(400).json({ message: 'Seats must be a positive number' });
+        return res
+          .status(400)
+          .json({ message: "Seats must be a positive number" });
       }
       updateData.seats = parseInt(seats);
     }
 
-    const updatedTable = await Table.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!updatedTable) return res.status(404).json({ message: 'Table not found' });
+    const updatedTable = await Table.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    );
+    if (!updatedTable)
+      return res.status(404).json({ message: "Table not found" });
 
     const currentOrder = await Order.findOne({
       tableId: updatedTable._id,
-      status: 'pending'
+      status: "pending",
     }).sort({ createdAt: -1 });
 
     res.json({
@@ -182,11 +200,11 @@ exports.updateTable = async (req, res) => {
       hasOrders: !!currentOrder,
       orders: currentOrder ? currentOrder.items : [],
       createdAt: updatedTable.createdAt,
-      updatedAt: updatedTable.updatedAt
+      updatedAt: updatedTable.updatedAt,
     });
   } catch (err) {
-    console.error('Error updating table:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating table:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -196,12 +214,15 @@ exports.deleteTable = async (req, res) => {
     await Order.deleteMany({ tableId: req.params.id });
 
     const deletedTable = await Table.findByIdAndDelete(req.params.id);
-    if (!deletedTable) return res.status(404).json({ message: 'Table not found' });
+    if (!deletedTable)
+      return res.status(404).json({ message: "Table not found" });
 
-    res.json({ message: 'Table and all associated orders deleted successfully' });
+    res.json({
+      message: "Table and all associated orders deleted successfully",
+    });
   } catch (err) {
-    console.error('Error deleting table:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error deleting table:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -222,72 +243,85 @@ exports.placeOrder = async (req, res) => {
     const section = await Section.findById(table.sectionId);
     if (!section) return res.status(404).json({ message: "Section not found" });
 
-    const validatedItems = orders.map(item => ({
+    const validatedItems = orders.map((item) => ({
       name: item.name,
       price: Number(item.price),
       quantity: Number(item.quantity) || 1,
       categoryName: item.categoryName || "Uncategorized",
       itemId: item.itemId || null,
       isCancelled: !!item.cancelledReason,
-      cancelledReason: item.cancelledReason || null
+      cancelledReason: item.cancelledReason || null,
     }));
 
-    const additionalTotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const additionalTotal = validatedItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
 
     let waiter = null;
     let waiterObject = null;
     if (waiterId) {
       waiter = await require("../models/Waiter").findById(waiterId);
       if (!waiter) return res.status(404).json({ message: "Waiter not found" });
-      
+
       // Create waiter object to store in table
       waiterObject = {
         _id: waiter._id,
         name: waiter.name,
-        phoneNumber: waiter.phoneNumber
+        phoneNumber: waiter.phoneNumber,
       };
     }
 
-    const existingOrder = await Order.findOne({ tableId, status: "pending" ,isDeleted: { $ne: true }});
+    const existingOrder = await Order.findOne({
+      tableId,
+      status: "pending",
+      isDeleted: { $ne: true },
+    });
 
-        if (existingOrder) {
-      const newItemMap = new Map(validatedItems.map(item => [item.itemId?.toString(), item]));
+    if (existingOrder) {
+      const newItemMap = new Map(
+        validatedItems.map((item) => [item.itemId?.toString(), item])
+      );
 
       const cancelledReason = req.body.cancelledReason;
 
       // Step 1: Mark removed items as cancelled
-      const updatedItems = existingOrder.items.map(existingItem => {
+      const updatedItems = existingOrder.items.map((existingItem) => {
         const idStr = existingItem.itemId?.toString();
 
         // Keep already cancelled items as is
         if (existingItem.isCancelled) return existingItem;
 
         // If not in new order list, mark as cancelled
-       if (!newItemMap.has(idStr)) {
-  return {
-    ...existingItem.toObject(),
-    isCancelled: true,
-    cancelledReason
-  };
-}
-
+        if (!newItemMap.has(idStr)) {
+          return {
+            ...existingItem.toObject(),
+            isCancelled: true,
+            cancelledReason,
+          };
+        }
 
         // Otherwise, update quantity and price
         const newItem = newItemMap.get(idStr);
-        return {
+        const r = {
           ...existingItem.toObject(),
           quantity: newItem.quantity,
           price: newItem.price,
           categoryName: newItem.categoryName || "Uncategorized",
-           isCancelled: !!newItem.cancelledReason,
-  cancelledReason: newItem.cancelledReason || null
+          isCancelled: !!newItem.cancelledReason,
+          cancelledReason: newItem.cancelledReason || null,
         };
+
+        if (r.isCancelled) {
+          delete r.itemId;
+        }
+        return r;
       });
 
       // Step 2: Add any new items that don't exist in existing order
       for (const item of validatedItems) {
         const alreadyExists = existingOrder.items.some(
-          i => i.itemId?.toString() === item.itemId?.toString()
+          (i) => i.itemId?.toString() === item.itemId?.toString()
         );
         if (!alreadyExists) {
           updatedItems.push(item);
@@ -296,7 +330,7 @@ exports.placeOrder = async (req, res) => {
 
       // Step 3: Calculate new total using only non-cancelled items
       const newTotal = updatedItems
-        .filter(item => !item.isCancelled)
+        .filter((item) => !item.isCancelled)
         .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
       // Update order
@@ -312,7 +346,7 @@ exports.placeOrder = async (req, res) => {
       await existingOrder.save();
 
       // Update table
-      table.currentOrderItems = updatedItems.filter(i => !i.isCancelled);
+      table.currentOrderItems = updatedItems.filter((i) => !i.isCancelled);
       table.currentBillAmount = newTotal;
       if (waiter) {
         table.waiterId = waiter._id;
@@ -334,25 +368,29 @@ exports.placeOrder = async (req, res) => {
         waiter: waiterObject,
         createdAt: table.createdAt,
         updatedAt: table.updatedAt,
-        firstOrderTime: table.firstOrderTime
+        firstOrderTime: table.firstOrderTime,
       });
     }
 
-    
     // 🆕 No existing pending order — create a new one
     const restaurant = await Restaurant.findById(restaurantId);
-    if (!restaurant) return res.status(404).json({ message: "Restaurant not found" });
+    if (!restaurant)
+      return res.status(404).json({ message: "Restaurant not found" });
 
     const now = new Date();
     const istOffset = 330 * 60 * 1000;
     const ist = new Date(now.getTime() + istOffset);
-    const [year, month, date] = [ist.getUTCFullYear(), ist.getUTCMonth() + 1, ist.getUTCDate()];
+    const [year, month, date] = [
+      ist.getUTCFullYear(),
+      ist.getUTCMonth() + 1,
+      ist.getUTCDate(),
+    ];
 
     restaurant.billTracking = restaurant.billTracking || {
       currentYear: year,
       currentMonth: month,
       currentDate: date,
-      dailyOrderCounter: 0
+      dailyOrderCounter: 0,
     };
 
     if (
@@ -364,12 +402,17 @@ exports.placeOrder = async (req, res) => {
         currentYear: year,
         currentMonth: month,
         currentDate: date,
-        dailyOrderCounter: 0
+        dailyOrderCounter: 0,
       };
     }
 
     restaurant.billTracking.dailyOrderCounter++;
-    const billNumber = `${String(year).slice(-2)}${String(month).padStart(2, "0")}${String(date).padStart(2, "0")}${String(restaurant.billTracking.dailyOrderCounter).padStart(4, "0")}`;
+    const billNumber = `${String(year).slice(-2)}${String(month).padStart(
+      2,
+      "0"
+    )}${String(date).padStart(2, "0")}${String(
+      restaurant.billTracking.dailyOrderCounter
+    ).padStart(4, "0")}`;
     await restaurant.save();
 
     const orderData = {
@@ -380,7 +423,7 @@ exports.placeOrder = async (req, res) => {
       items: validatedItems,
       total: additionalTotal,
       status: "pending",
-      billNumber
+      billNumber,
     };
 
     if (waiter) {
@@ -416,14 +459,13 @@ exports.placeOrder = async (req, res) => {
       waiter: waiterObject,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt,
-      firstOrderTime: table.firstOrderTime
+      firstOrderTime: table.firstOrderTime,
     });
   } catch (err) {
     console.error("Error placing order:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 // Delete an order by ID
 exports.deleteOrderById = async (req, res) => {
@@ -432,7 +474,9 @@ exports.deleteOrderById = async (req, res) => {
     const { reason } = req.body; // Get reason from request body
 
     if (!reason) {
-      return res.status(400).json({ message: "Reason for deleting order is required" });
+      return res
+        .status(400)
+        .json({ message: "Reason for deleting order is required" });
     }
 
     // Find the order to mark as deleted
@@ -449,8 +493,8 @@ exports.deleteOrderById = async (req, res) => {
     // Check for remaining pending (non-deleted) orders for the table
     const pendingOrders = await Order.find({
       tableId: order.tableId,
-      status: 'pending',
-      isDeleted: { $ne: true }
+      status: "pending",
+      isDeleted: { $ne: true },
     });
 
     if (pendingOrders.length === 0) {
@@ -462,16 +506,19 @@ exports.deleteOrderById = async (req, res) => {
         billNumber: null,
         firstOrderTime: null,
         waiterId: null,
-        waiter: null
+        waiter: null,
       });
     } else {
-      const totalAmount = pendingOrders.reduce((sum, order) => sum + order.total, 0);
-      const allItems = pendingOrders.flatMap(order => order.items);
+      const totalAmount = pendingOrders.reduce(
+        (sum, order) => sum + order.total,
+        0
+      );
+      const allItems = pendingOrders.flatMap((order) => order.items);
 
       await Table.findByIdAndUpdate(order.tableId, {
         hasOrders: true,
         currentOrderItems: allItems,
-        currentBillAmount: totalAmount
+        currentBillAmount: totalAmount,
       });
     }
 
@@ -482,25 +529,26 @@ exports.deleteOrderById = async (req, res) => {
   }
 };
 
-
 // Modified getTableById to include waiter info
 exports.getTableById = async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table) return res.status(404).json({ message: 'Table not found' });
+    if (!table) return res.status(404).json({ message: "Table not found" });
 
     const currentOrder = await Order.findOne({
       tableId: table._id,
-      status: 'pending',
-      isDeleted: { $ne: true } 
-    }).sort({ createdAt: -1 }).populate('waiterId');
+      status: "pending",
+      isDeleted: { $ne: true },
+    })
+      .sort({ createdAt: -1 })
+      .populate("waiterId");
 
     let waiterInfo = null;
     if (currentOrder && currentOrder.waiterId) {
       waiterInfo = {
         _id: currentOrder.waiterId._id,
         name: currentOrder.waiterId.name,
-        phoneNumber: currentOrder.waiterId.phoneNumber
+        phoneNumber: currentOrder.waiterId.phoneNumber,
       };
     }
 
@@ -513,11 +561,11 @@ exports.getTableById = async (req, res) => {
       seats: table.seats,
       waiter: waiterInfo,
       createdAt: table.createdAt,
-      updatedAt: table.updatedAt
+      updatedAt: table.updatedAt,
     });
   } catch (err) {
-    console.error('Error getting table:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error getting table:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -525,19 +573,19 @@ exports.getTableById = async (req, res) => {
 exports.clearOrders = async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table) return res.status(404).json({ message: 'Table not found' });
+    if (!table) return res.status(404).json({ message: "Table not found" });
 
     const { paymentMethod } = req.body;
     if (!paymentMethod) {
-      return res.status(400).json({ message: 'Payment method is required' });
+      return res.status(400).json({ message: "Payment method is required" });
     }
 
-     const billNumber = table.billNumber; // ✅ Save before clearing
+    const billNumber = table.billNumber; // ✅ Save before clearing
 
     // Update all pending orders: mark as completed and set payment method
     await Order.updateMany(
-      { tableId: table._id, status: 'pending' },
-      { status: 'completed', paymentMethod }
+      { tableId: table._id, status: "pending" },
+      { status: "completed", paymentMethod }
     );
 
     // Clear all order-related fields on the table, including the waiter data
@@ -551,7 +599,7 @@ exports.clearOrders = async (req, res) => {
         billNumber: null,
         firstOrderTime: null,
         waiterId: null,
-        waiter: null // Clear the waiter object
+        waiter: null, // Clear the waiter object
       },
       { new: true }
     );
@@ -566,10 +614,10 @@ exports.clearOrders = async (req, res) => {
       paymentMethod, // Include in response
       billNumber,
       createdAt: updatedTable.createdAt,
-      updatedAt: updatedTable.updatedAt
+      updatedAt: updatedTable.updatedAt,
     });
   } catch (err) {
-    console.error('Error clearing orders:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error clearing orders:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

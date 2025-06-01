@@ -8,11 +8,11 @@ const OrderItemSchema = new mongoose.Schema({
   },
   price: {
     type: Number,
-    required: true
+    required: false
   },
   quantity: {
     type: Number,
-    required: true,
+    required: false,
     default: 1
   },
   categoryName: {
