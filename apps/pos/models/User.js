@@ -18,6 +18,9 @@ const UserSchema = new mongoose.Schema({
   isEmailVerified: { type: Boolean, default: false },
   emailVerificationCode: { type: String },
   emailVerificationExpiry: { type: Date },
+  // Password reset fields
+  passwordResetCode: { type: String },
+  passwordResetExpiry: { type: Date },
   isActive: { type: Boolean, default: false }, // User becomes active only after email verification
 }, { timestamps: true });
 
