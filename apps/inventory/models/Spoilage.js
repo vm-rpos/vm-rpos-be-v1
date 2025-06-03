@@ -30,25 +30,14 @@ const SpoilageSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  totalLossValue: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  spoilDate: {
-    type: Date,
-    default: Date.now
-  },
+ 
+
   reason: {
     type: String,
   
     required: true
   },
-  notes: {
-    type: String,
-    default: '',
-    trim: true
-  },
+
   reportedBy: {
     type: String,
     default:'',
@@ -58,10 +47,7 @@ const SpoilageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Vendor'
   },
-  imageUrl: {
-    type: String,
-    trim: true
-  }
+
 }, { 
   timestamps: true 
 });
