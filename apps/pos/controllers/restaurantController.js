@@ -110,15 +110,10 @@ exports.getRestaurantById = async (req, res) => {
   }
 };
 
-// controllers/restaurantController.js
 exports.createRestaurant = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const userId = req.userId || req.body.userId;
 
-    // Validate userId
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       throw new Error("Invalid user ID");
     }
@@ -130,26 +125,24 @@ exports.createRestaurant = async (req, res) => {
       createdBy: userId,
     });
 
-    await newRestaurant.save({ session });
+    await newRestaurant.save();
 
     // Update User
     await User.findByIdAndUpdate(
       userId,
       { $addToSet: { restaurantIds: newRestaurant._id } },
-      { new: true, session }
+      { new: true }
     );
 
-    // Update Super - just push the restaurant ID
+    // Update Super
     await Super.findOneAndUpdate(
       { user: userId },
       {
         $addToSet: { createdRestaurants: newRestaurant._id },
         $setOnInsert: { user: userId },
       },
-      { upsert: true, new: true, session }
+      { upsert: true, new: true }
     );
-
-    await session.commitTransaction();
 
     const populatedRestaurant = await Restaurant.findById(
       newRestaurant._id
@@ -160,17 +153,15 @@ exports.createRestaurant = async (req, res) => {
       data: populatedRestaurant,
     });
   } catch (err) {
-    await session.abortTransaction();
     console.error("Restaurant creation error:", err);
     res.status(500).json({
       success: false,
       error: err.message,
       message: "Failed to create restaurant",
     });
-  } finally {
-    session.endSession();
   }
 };
+
 
 exports.uploadQrImage = async (req, res) => {
   const restaurantId = req.params.id;

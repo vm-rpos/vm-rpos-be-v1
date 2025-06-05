@@ -26,15 +26,35 @@ const OrderItemSchema = new mongoose.Schema({
     required: false
   },
   isCancelled: { type: Boolean, default: false },
-cancelledReason: { type: String, default: null }
+  cancelledReason: { type: String, default: null }
+});
 
+// New schema for charges
+const ChargeSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true
+  },
+  type: {
+    type: String,
+    enum: ['percentage', 'fixed'],
+    required: true
+  },
+  value: {
+    type: Number,
+    required: true
+  },
+  amount: {
+    type: Number,
+    required: true
+  }
 });
 
 const OrderSchema = new mongoose.Schema({
   restaurantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Restaurant',
-    required: true // Ensure every order belongs to a restaurant
+    required: true
   },
   billNumber: {
     type: String,
@@ -47,22 +67,21 @@ const OrderSchema = new mongoose.Schema({
     ref: 'Table',
     required: true
   },
-    sectionId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Section',
-        required: true
-      },
-      sectionName: 
-      { 
-        type: String 
-      },
+  sectionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Section',
+    required: true
+  },
+  sectionName: { 
+    type: String 
+  },
   waiterId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Waiter',
     required: false
   },
   waiter: {
-    type: String, // This will store the name of the waiter
+    type: String,
     required: false
   },
   paymentMethod: {
@@ -70,6 +89,18 @@ const OrderSchema = new mongoose.Schema({
     required: false,
   },
   items: [OrderItemSchema],
+  // Add charges field
+  charges: [ChargeSchema],
+  subtotal: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  totalCharges: {
+    type: Number,
+    required: true,
+    default: 0
+  },
   total: {
     type: Number,
     required: true,
@@ -81,8 +112,7 @@ const OrderSchema = new mongoose.Schema({
     default: 'pending'
   },
   isDeleted: { type: Boolean, default: false },
-deletedReason: { type: String, default: null }
-
+  deletedReason: { type: String, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', OrderSchema);

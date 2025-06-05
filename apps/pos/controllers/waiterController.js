@@ -1,5 +1,7 @@
 const Waiter = require('../models/Waiter');
 const mongoose = require('mongoose');
+const Table=require('../models/Table');
+const section=require('../models/Section')
 
 // Get all waiters
 // exports.getAllWaiters = async (req, res) => {
@@ -113,5 +115,72 @@ exports.deleteWaiter = async (req, res) => {
   } catch (err) {
     console.error('Error deleting waiter:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
+
+exports.getAllWaitersWithTables = async (req, res) => {
+  try {
+    const restaurantId = req.user?.restaurantId;
+
+    if (!restaurantId) {
+      return res
+        .status(403)
+        .json({ message: "Unauthorized: Restaurant ID missing in token" });
+    }
+
+    // Get all waiters for the restaurant
+    const waiters = await Waiter.find({ restaurantId });
+
+    const waitersWithTables = await Promise.all(
+      waiters.map(async (waiter) => {
+        // Get all tables assigned to this waiter
+        const tables = await Table.find({ 
+          restaurantId, 
+          waiterId: waiter._id 
+        }).populate('sectionId', 'section');
+
+        // Group tables by section
+        const sectionGroups = {};
+        
+        for (const table of tables) {
+          const sectionName = table.sectionId?.section || 'No Section';
+          
+          if (!sectionGroups[sectionName]) {
+            sectionGroups[sectionName] = [];
+          }
+
+          // Calculate total amount for current order items
+          const totalItemsAmount = table.currentOrderItems?.reduce((sum, item) => {
+            return sum + (item.price * item.quantity);
+          }, 0) || 0;
+
+          sectionGroups[sectionName].push({
+            tableName: table.name,
+            tableNumber: table.tableNumber,
+            amount: table.currentBillAmount || totalItemsAmount,
+            seats:table.seats,
+            firstOrderTime: table.firstOrderTime
+          });
+        }
+
+        return {
+
+          waiterId: waiter._id,
+          name: waiter.name,
+          phone: waiter.phoneNumber,
+          age: waiter.age,
+          noOfTablesAllotted: tables.length,
+          sections: sectionGroups
+          
+        };
+      })
+    );
+
+    res.json(waitersWithTables);
+  } catch (err) {
+    console.error("Error getting waiters with tables:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };

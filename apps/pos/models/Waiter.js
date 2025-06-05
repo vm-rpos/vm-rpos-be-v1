@@ -20,7 +20,7 @@ const waiterSchema = new mongoose.Schema(
     },
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Restaurant", // Assuming you have a Restaurant model
+      ref: "Restaurant", 
       required: true,
     },
   },
@@ -28,3 +28,4 @@ const waiterSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("Waiter", waiterSchema);
+

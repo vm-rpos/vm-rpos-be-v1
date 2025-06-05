@@ -4,6 +4,7 @@ const waiterController = require('../controllers/waiterController');
 const protect = require('../middlewares/authMiddleware');
 
 router.use(protect); // Protect all routes in this file
+router.get('/with-tables', waiterController.getAllWaitersWithTables);
 
 router.get('/', waiterController.getAllWaiters);
 router.post('/', waiterController.createWaiter);

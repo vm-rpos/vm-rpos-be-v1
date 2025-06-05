@@ -59,7 +59,7 @@ exports.createIVMOrder = async (req, res) => {
           item.itemId,
           {
             $inc: { quantity: item.quantity },
-            price: item.price,
+            price:newAvgPrice ,
             avgPrice: newAvgPrice,
             totalPurchaseValue: newTotalPurchaseValue
           },
@@ -135,7 +135,8 @@ exports.getOrdersByType = async (req, res) => {
     console.log("Params:", req.params);
     console.log("Query Params:", req.query);
 
-    if (!['purchaseOrder', 'saleOrder', 'stockoutOrder'].includes(orderType)) {
+    // Updated to include spoilageOrder
+    if (!['purchaseOrder', 'saleOrder', 'stockoutOrder', 'spoilageOrder'].includes(orderType)) {
       console.log("Invalid order type:", orderType);
       return res.status(400).json({ message: 'Invalid order type' });
     }
@@ -143,8 +144,8 @@ exports.getOrdersByType = async (req, res) => {
     // Create base filter
     const filter = { orderType, restaurantId };
 
-    // Status filter
-    if (status && status.toLowerCase() !== 'all') {
+    // Status filter - only apply for non-spoilage orders since spoilage orders don't use status
+    if (status && status.toLowerCase() !== 'all' && orderType !== 'spoilageOrder') {
       filter.status = status;
     }
 
@@ -183,20 +184,41 @@ exports.getOrdersByType = async (req, res) => {
     let searchQuery = {};
     if (searchTerm && searchTerm.trim() !== '') {
       const searchRegex = new RegExp(searchTerm.trim(), 'i');
-      const vendors = await Vendor.find({ name: searchRegex });
-      const vendorIds = vendors.map(v => v._id);
+      
+      // Different search fields based on order type
+      if (orderType === 'spoilageOrder') {
+        // For spoilage orders, search in item names, reasons, and reportedBy
+        const items = await Item.find({ name: searchRegex });
+        const itemIds = items.map(i => i._id);
 
-      const items = await Item.find({ name: searchRegex });
-      const itemIds = items.map(i => i._id);
+        searchQuery = {
+          $or: [
+            { 'items.name': searchRegex },
+            { 'items.reason': searchRegex },
+            { 'items.reportedBy': searchRegex },
+            { 'items.itemId': { $in: itemIds } },
+            { notes: searchRegex }
+          ],
+        };
+      } else {
+        // For other order types, include vendor search
+        const vendors = await Vendor.find({ name: searchRegex });
+        const vendorIds = vendors.map(v => v._id);
 
-      searchQuery = {
-        $or: [
-          { vendorId: { $in: vendorIds } },
-          { 'items.name': searchRegex },
-          { status: searchRegex },
-          { 'items.itemId': { $in: itemIds } },
-        ],
-      };
+        const items = await Item.find({ name: searchRegex });
+        const itemIds = items.map(i => i._id);
+
+        searchQuery = {
+          $or: [
+            { vendorId: { $in: vendorIds } },
+            { 'items.name': searchRegex },
+            { status: searchRegex },
+            { 'items.itemId': { $in: itemIds } },
+            { destination: searchRegex },
+            { notes: searchRegex }
+          ],
+        };
+      }
 
       console.log("Search query applied:", JSON.stringify(searchQuery));
     }
@@ -216,9 +238,21 @@ exports.getOrdersByType = async (req, res) => {
     const totalCount = await IVMOrder.countDocuments(finalFilter);
     const totalPages = Math.ceil(totalCount / itemsPerPage);
 
+    // Build populate array based on order type
+    let populateArray = ['items.itemId'];
+    
+    // Only populate vendorId for orders that have vendors
+    if (orderType !== 'spoilageOrder') {
+      populateArray.push('vendorId');
+    }
+
+    // For spoilage orders, also populate category information
+    if (orderType === 'spoilageOrder') {
+      populateArray.push('items.categoryId');
+    }
+
     const orders = await IVMOrder.find(finalFilter)
-      .populate('vendorId')
-      .populate('items.itemId')
+      .populate(populateArray)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(itemsPerPage);

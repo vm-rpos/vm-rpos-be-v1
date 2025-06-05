@@ -1,8 +1,59 @@
-const Category = require('../models/Category');
-const Item = require('../models/Item');
-const Tag = require('../models/Tag');
-const mongoose = require('mongoose');
+const Category = require("../models/Category");
+const Item = require("../models/Item");
+const Tag = require("../models/Tag");
+const mongoose = require("mongoose");
 
+
+
+exports.reorderCategories = async (req, res) => {
+  try {
+    const { categoryIds } = req.body; // Array of category IDs in new order
+    const restaurantId = req.user?.restaurantId;
+
+    if (!restaurantId) {
+      return res.status(400).json({ message: "Restaurant ID not found in token" });
+    }
+
+    if (!categoryIds || !Array.isArray(categoryIds)) {
+      return res.status(400).json({ message: "categoryIds array is required" });
+    }
+
+    // Validate restaurantId
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ message: "Invalid restaurant ID format" });
+    }
+
+    const objectId = new mongoose.Types.ObjectId(restaurantId);
+
+    // Verify all categories belong to this restaurant
+    const categories = await Category.find({ 
+      _id: { $in: categoryIds }, 
+      restaurantId: objectId 
+    });
+
+    if (categories.length !== categoryIds.length) {
+      return res.status(400).json({ message: "Some categories don't belong to this restaurant" });
+    }
+
+    // Update the index for each category based on its position in the array
+    const updatePromises = categoryIds.map((categoryId, index) => {
+      return Category.findByIdAndUpdate(
+        categoryId,
+        { index: index },
+        { new: true }
+      );
+    });
+
+    await Promise.all(updatePromises);
+
+    res.json({ message: "Categories reordered successfully" });
+  } catch (err) {
+    console.error('Error reordering categories:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Updated getAllCategories method to sort by index
 exports.getAllCategories = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
@@ -18,7 +69,9 @@ exports.getAllCategories = async (req, res) => {
 
     const objectId = new mongoose.Types.ObjectId(restaurantId);
 
-    const categories = await Category.find({ restaurantId: objectId }).sort({ name: 1 });
+    // Sort by index first, then by creation time for categories without index
+    const categories = await Category.find({ restaurantId: objectId })
+      .sort({ index: 1, createdAt: 1 });
 
     const categoriesWithItems = await Promise.all(
       categories.map(async (category) => {
@@ -30,6 +83,7 @@ exports.getAllCategories = async (req, res) => {
         return {
           _id: category._id,
           name: category.name,
+          index: category.index,
           items,
         };
       })
@@ -42,8 +96,7 @@ exports.getAllCategories = async (req, res) => {
   }
 };
 
-
-// Create a new category
+// Updated createCategory method to set new categories at the end
 exports.createCategory = async (req, res) => {
   try {
     const { name } = req.body;
@@ -59,16 +112,24 @@ exports.createCategory = async (req, res) => {
 
     const existingCategory = await Category.findOne({
       name,
-      restaurantId: req.user.restaurantId, // Ensure uniqueness within a restaurant
+      restaurantId: req.user.restaurantId,
     });
 
     if (existingCategory) {
       return res.status(400).json({ message: "Category already exists" });
     }
 
+    // Get the highest index for this restaurant and add 1
+    const lastCategory = await Category.findOne({ 
+      restaurantId: req.user.restaurantId 
+    }).sort({ index: -1 });
+
+    const nextIndex = lastCategory && lastCategory.index >= 0 ? lastCategory.index + 1 : 0;
+
     const newCategory = new Category({
       name,
-      restaurantId: req.user.restaurantId, // Assign restaurantId
+      restaurantId: req.user.restaurantId,
+      index: nextIndex, // Set the new category at the end
     });
 
     const savedCategory = await newCategory.save();
@@ -79,17 +140,21 @@ exports.createCategory = async (req, res) => {
   }
 };
 
+
 // Get a specific category with its items
 exports.getCategoryById = async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+    if (!category)
+      return res.status(404).json({ message: "Category not found" });
 
-    const items = await Item.find({ categoryId: category._id }).populate('tags');
+    const items = await Item.find({ categoryId: category._id }).populate(
+      "tags"
+    );
     res.json({ _id: category._id, name: category.name, items });
   } catch (err) {
-    console.error('Error getting category:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error getting category:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -117,37 +182,44 @@ exports.updateCategory = async (req, res) => {
   }
 };
 
+
 // Delete a category and all its items
 exports.deleteCategory = async (req, res) => {
   try {
     const userRestaurantId = req.user?.restaurantId;
 
     if (!userRestaurantId) {
-      return res.status(403).json({ message: 'Unauthorized: No restaurant linked to user' });
+      return res
+        .status(403)
+        .json({ message: "Unauthorized: No restaurant linked to user" });
     }
 
     const category = await Category.findById(req.params.id);
 
     if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
+      return res.status(404).json({ message: "Category not found" });
     }
 
     // Check if category belongs to the user's restaurant
     if (category.restaurantId.toString() !== userRestaurantId.toString()) {
-      return res.status(403).json({ message: 'Unauthorized: Cannot delete category from another restaurant' });
+      return res
+        .status(403)
+        .json({
+          message:
+            "Unauthorized: Cannot delete category from another restaurant",
+        });
     }
 
     // Delete the category and related items
     await Category.findByIdAndDelete(req.params.id);
     await Item.deleteMany({ categoryId: req.params.id });
 
-    res.json({ message: 'Category and all its items deleted successfully' });
+    res.json({ message: "Category and all its items deleted successfully" });
   } catch (err) {
-    console.error('Error deleting category:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error deleting category:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
-
 
 // Add item to category with tag and sectionData handling
 exports.addItemToCategory = async (req, res) => {
@@ -159,7 +231,9 @@ exports.addItemToCategory = async (req, res) => {
     }
 
     if (!req.user || !req.user.restaurantId) {
-      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+      return res
+        .status(403)
+        .json({ message: "Unauthorized: No restaurant assigned" });
     }
 
     const category = await Category.findById(req.params.id);
@@ -168,7 +242,11 @@ exports.addItemToCategory = async (req, res) => {
     }
 
     if (category.restaurantId.toString() !== req.user.restaurantId) {
-      return res.status(403).json({ message: "Unauthorized: Category does not belong to your restaurant" });
+      return res
+        .status(403)
+        .json({
+          message: "Unauthorized: Category does not belong to your restaurant",
+        });
     }
 
     const existingItem = await Item.findOne({
@@ -178,14 +256,20 @@ exports.addItemToCategory = async (req, res) => {
     });
 
     if (existingItem) {
-      return res.status(400).json({ message: "Item with this name already exists in the category" });
+      return res
+        .status(400)
+        .json({
+          message: "Item with this name already exists in the category",
+        });
     }
 
     // Process tags
     let tagIds = [];
     if (tags && tags.length > 0) {
       for (const tagName of tags) {
-        let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, "i") } });
+        let tag = await Tag.findOne({
+          name: { $regex: new RegExp(`^${tagName}$`, "i") },
+        });
         if (!tag) {
           tag = new Tag({ name: tagName });
           await tag.save();
@@ -212,7 +296,9 @@ exports.addItemToCategory = async (req, res) => {
 
     await newItem.save();
 
-    const items = await Item.find({ categoryId: category._id }).populate("tags");
+    const items = await Item.find({ categoryId: category._id }).populate(
+      "tags"
+    );
     res.status(201).json({ _id: category._id, name: category.name, items });
   } catch (err) {
     console.error("Error adding item to category:", err);
@@ -227,17 +313,20 @@ exports.updateItemInCategory = async (req, res) => {
 
     // Ensure name is provided
     if (!name) {
-      return res.status(400).json({ message: 'Item name is required' });
+      return res.status(400).json({ message: "Item name is required" });
     }
 
     const category = await Category.findById(req.params.categoryId);
     if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
+      return res.status(404).json({ message: "Category not found" });
     }
 
-    const item = await Item.findOne({ _id: req.params.itemId, categoryId: category._id });
+    const item = await Item.findOne({
+      _id: req.params.itemId,
+      categoryId: category._id,
+    });
     if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
+      return res.status(404).json({ message: "Item not found" });
     }
 
     // Check for duplicate item name in the category
@@ -247,17 +336,23 @@ exports.updateItemInCategory = async (req, res) => {
       _id: { $ne: req.params.itemId },
     });
     if (duplicateItem) {
-      return res.status(400).json({ message: 'Another item with this name already exists in the category' });
+      return res
+        .status(400)
+        .json({
+          message: "Another item with this name already exists in the category",
+        });
     }
 
     // Process tags if provided
-    let tagIds = item.tags;  // Default to current tags
+    let tagIds = item.tags; // Default to current tags
     if (tags !== undefined) {
-      tagIds = [];  // Reset tags array
+      tagIds = []; // Reset tags array
 
       // Process each tag name
       for (const tagName of tags) {
-        let tag = await Tag.findOne({ name: { $regex: new RegExp(`^${tagName}$`, 'i') } });
+        let tag = await Tag.findOne({
+          name: { $regex: new RegExp(`^${tagName}$`, "i") },
+        });
         if (!tag) {
           tag = new Tag({ name: tagName });
           await tag.save();
@@ -268,26 +363,28 @@ exports.updateItemInCategory = async (req, res) => {
 
     // Prepare update fields
     const updatedFields = {
-      name,  // Updated name
-      description: description !== undefined ? description : item.description,  // If description is provided, update, else keep the existing one
-      tags: tagIds,  // Updated tags
-      categoryName: category.name,  // Keeping the category name as it is
+      name, // Updated name
+      description: description !== undefined ? description : item.description, // If description is provided, update, else keep the existing one
+      tags: tagIds, // Updated tags
+      categoryName: category.name, // Keeping the category name as it is
     };
 
     // Handle sectionData update if provided
     if (Array.isArray(sectionData)) {
-      updatedFields.sectionData = sectionData;  // Update section data if provided
+      updatedFields.sectionData = sectionData; // Update section data if provided
     }
 
     // Update the item in the database
     await Item.findByIdAndUpdate(req.params.itemId, updatedFields);
 
     // Fetch updated list of items in the category
-    const updatedItems = await Item.find({ categoryId: category._id }).populate('tags');
+    const updatedItems = await Item.find({ categoryId: category._id }).populate(
+      "tags"
+    );
     res.json({ _id: category._id, name: category.name, items: updatedItems });
   } catch (err) {
-    console.error('Error updating item in category:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating item in category:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -295,16 +392,20 @@ exports.updateItemInCategory = async (req, res) => {
 exports.deleteItemFromCategory = async (req, res) => {
   try {
     const category = await Category.findById(req.params.categoryId);
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+    if (!category)
+      return res.status(404).json({ message: "Category not found" });
 
-    const item = await Item.findOne({ _id: req.params.itemId, categoryId: category._id });
-    if (!item) return res.status(404).json({ message: 'Item not found' });
+    const item = await Item.findOne({
+      _id: req.params.itemId,
+      categoryId: category._id,
+    });
+    if (!item) return res.status(404).json({ message: "Item not found" });
 
     await Item.findByIdAndDelete(req.params.itemId);
 
-    res.json({ message: 'Item deleted successfully' });
+    res.json({ message: "Item deleted successfully" });
   } catch (err) {
-    console.error('Error deleting item from category:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error deleting item from category:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

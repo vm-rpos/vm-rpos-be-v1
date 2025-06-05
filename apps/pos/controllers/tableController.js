@@ -466,6 +466,64 @@ exports.placeOrder = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+exports.clearOrders = async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ message: "Table not found" });
+
+    const { paymentMethod, charges = [], subtotal = 0, totalCharges = 0, total = 0 } = req.body;
+
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "Payment method is required" });
+    }
+
+    const billNumber = table.billNumber; // Save before clearing
+
+    // Update all pending orders: mark as completed and update payment/charges
+    await Order.updateMany(
+      { tableId: table._id, status: "pending" },
+      {
+        status: "completed",
+        paymentMethod,
+        charges,
+        subtotal,
+        totalCharges,
+        total
+      }
+    );
+
+    // Clear table-related fields
+    const updatedTable = await Table.findByIdAndUpdate(
+      table._id,
+      {
+        hasOrders: false,
+        currentOrderItems: [],
+        currentBillAmount: 0,
+        paymentMethod: null,
+        billNumber: null,
+        firstOrderTime: null,
+        waiterId: null,
+        waiter: null
+      },
+      { new: true }
+    );
+
+    res.json({
+      _id: updatedTable._id,
+      name: updatedTable.name,
+      tableNumber: updatedTable.tableNumber,
+      hasOrders: false,
+      orders: [],
+      paymentMethod,
+      billNumber,
+      createdAt: updatedTable.createdAt,
+      updatedAt: updatedTable.updatedAt,
+    });
+  } catch (err) {
+    console.error("Error clearing orders:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 // Delete an order by ID
 exports.deleteOrderById = async (req, res) => {
@@ -569,55 +627,5 @@ exports.getTableById = async (req, res) => {
   }
 };
 
-// Clear orders for a table removes the pending status from all orders associated with the table
-exports.clearOrders = async (req, res) => {
-  try {
-    const table = await Table.findById(req.params.id);
-    if (!table) return res.status(404).json({ message: "Table not found" });
 
-    const { paymentMethod } = req.body;
-    if (!paymentMethod) {
-      return res.status(400).json({ message: "Payment method is required" });
-    }
 
-    const billNumber = table.billNumber; // ✅ Save before clearing
-
-    // Update all pending orders: mark as completed and set payment method
-    await Order.updateMany(
-      { tableId: table._id, status: "pending" },
-      { status: "completed", paymentMethod }
-    );
-
-    // Clear all order-related fields on the table, including the waiter data
-    const updatedTable = await Table.findByIdAndUpdate(
-      table._id,
-      {
-        hasOrders: false,
-        currentOrderItems: [],
-        currentBillAmount: 0,
-        paymentMethod: null,
-        billNumber: null,
-        firstOrderTime: null,
-        waiterId: null,
-        waiter: null, // Clear the waiter object
-      },
-      { new: true }
-    );
-
-    // Respond with updated info, including the payment method used
-    res.json({
-      _id: updatedTable._id,
-      name: updatedTable.name,
-      tableNumber: updatedTable.tableNumber,
-      hasOrders: false,
-      orders: [],
-      paymentMethod, // Include in response
-      billNumber,
-      createdAt: updatedTable.createdAt,
-      updatedAt: updatedTable.updatedAt,
-    });
-  } catch (err) {
-    console.error("Error clearing orders:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};

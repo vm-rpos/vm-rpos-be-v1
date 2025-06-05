@@ -10,8 +10,13 @@ const CategorySchema = new mongoose.Schema(
     },
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Restaurant", // Assuming you have a Restaurant model
+      ref: "Restaurant",
       required: true,
+    },
+    index: {
+      type: Number,
+      required: false,
+      default:-1
     },
   },
   { timestamps: true }
