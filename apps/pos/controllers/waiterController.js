@@ -40,7 +40,7 @@ exports.getAllWaiters = async (req, res) => {
 // Create a new waiter
 exports.createWaiter = async (req, res) => {
   try {
-    const { name, age, phoneNumber } = req.body;
+    const { name, age, phoneNumber ,tables } = req.body;
 
     if (!name || !age || !phoneNumber) {
       return res.status(400).json({ message: "All fields are required" });
@@ -62,6 +62,7 @@ exports.createWaiter = async (req, res) => {
       age,
       phoneNumber,
       restaurantId: req.user.restaurantId, // Assign the logged-in user's restaurantId
+      tables:tables
     });
 
     await newWaiter.save();

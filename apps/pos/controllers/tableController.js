@@ -504,6 +504,7 @@ exports.clearOrders = async (req, res) => {
         firstOrderTime: null,
         waiterId: null,
         waiter: null
+        
       },
       { new: true }
     );

@@ -130,7 +130,7 @@ exports.getAllOrders = async (req, res) => {
       section: order.sectionName || "Unknown",
       waiter: order.waiter,
       items: order.items,
-      total: order.total,
+      charges:order.charges,
       status: order.status,
       paymentMethod: order.paymentMethod,
       createdAt: order.createdAt,

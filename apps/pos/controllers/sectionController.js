@@ -438,3 +438,51 @@ exports.deleteSection = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
+
+// Get all sections with their tables and latest orders
+exports.getSectionsWithTablesdata = async (req, res) => {
+  try {
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+    }
+    
+    const restaurantId = req.user.restaurantId;
+    
+    // Get all sections of the restaurant
+    const sections = await Section.find({ restaurantId }).sort({ createdAt: -1 }).lean();
+    
+    const responseData = [];
+    
+    for (const section of sections) {
+      // Get all tables for this section (no need to populate waiterId as we have waiter object)
+      const tables = await Table.find({ sectionId: section._id, restaurantId }).lean();
+      
+      const tableData = [];
+      
+      for (const table of tables) {
+        // Use data directly from the table model including the waiter object
+        const totalItems = table.currentOrderItems?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+        
+        tableData.push({
+          tableId: table._id,
+          tableNumber: table.tableNumber,
+          tableName: table.name,
+        });
+      }
+      
+      responseData.push({
+        sectionName: section.section,
+        sectionId: section._id,
+        tables: tableData,
+      });
+    }
+    
+    return res.status(200).json(responseData);
+  } catch (err) {
+    console.error("Error fetching sections with tables:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};

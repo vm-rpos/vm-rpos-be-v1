@@ -91,16 +91,7 @@ const OrderSchema = new mongoose.Schema({
   items: [OrderItemSchema],
   // Add charges field
   charges: [ChargeSchema],
-  subtotal: {
-    type: Number,
-    required: true,
-    default: 0
-  },
-  totalCharges: {
-    type: Number,
-    required: true,
-    default: 0
-  },
+
   total: {
     type: Number,
     required: true,

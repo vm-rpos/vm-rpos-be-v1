@@ -20,12 +20,15 @@ const waiterSchema = new mongoose.Schema(
     },
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Restaurant", 
+      ref: "Restaurant",
       required: true,
+    },
+    tables: {
+      type: [Object],
+      required: false,
     },
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model("Waiter", waiterSchema);
-
