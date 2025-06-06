@@ -9,7 +9,6 @@ exports.getAllOrders = async (req, res) => {
     const role = req.user?.role;
     console.log("User role:", role);
 
-
     if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({ message: "Invalid or missing restaurant ID in token" });
     }
@@ -122,24 +121,41 @@ exports.getAllOrders = async (req, res) => {
     const orders = result[0]?.data || [];
     const totalCount = result[0]?.totalCount[0]?.count || 0;
 
-    const ordersWithInfo = orders.map(order => ({
-      _id: order._id,
-      tableId: order.table?._id,
-      tableNumber: order.table?.tableNumber || "N/A",
-      tableName: order.table?.name || "Unknown",
-      section: order.sectionName || "Unknown",
-      waiter: order.waiter,
-      items: order.items,
-      charges:order.charges,
-      status: order.status,
-      paymentMethod: order.paymentMethod,
-      createdAt: order.createdAt,
-      restaurantId: order.restaurant?._id || order.restaurantId,
-      restaurantName: order.restaurant?.name || "Unknown",
-      billNumber: order.billNumber,
-      isDeleted: order.isDeleted,
-      deletedReason: order.deletedReason,
-    }));
+    const ordersWithInfo = orders.map(order => {
+      // Calculate items total (excluding cancelled items)
+      const itemsTotal = order.items.reduce((sum, item) => {
+        if (item.isCancelled) return sum;
+        return sum + (item.price * item.quantity);
+      }, 0);
+
+      // Calculate charges total
+      const chargesTotal = order.charges.reduce((sum, charge) => {
+        return sum + charge.amount;
+      }, 0);
+
+      // Calculate final total
+      const total = itemsTotal + chargesTotal;
+
+      return {
+        _id: order._id,
+        tableId: order.table?._id,
+        tableNumber: order.table?.tableNumber || "N/A",
+        tableName: order.table?.name || "Unknown",
+        section: order.sectionName || "Unknown",
+        waiter: order.waiter,
+        items: order.items,
+        charges: order.charges,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        createdAt: order.createdAt,
+        restaurantId: order.restaurant?._id || order.restaurantId,
+        restaurantName: order.restaurant?.name || "Unknown",
+        billNumber: order.billNumber,
+        isDeleted: order.isDeleted,
+        deletedReason: order.deletedReason,
+        total: total
+      };
+    });
 
     res.json({
       orders: ordersWithInfo,

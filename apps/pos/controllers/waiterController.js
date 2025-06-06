@@ -62,7 +62,7 @@ exports.createWaiter = async (req, res) => {
       age,
       phoneNumber,
       restaurantId: req.user.restaurantId, // Assign the logged-in user's restaurantId
-      tables:tables
+
     });
 
     await newWaiter.save();

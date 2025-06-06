@@ -23,10 +23,7 @@ const waiterSchema = new mongoose.Schema(
       ref: "Restaurant",
       required: true,
     },
-    tables: {
-      type: [Object],
-      required: false,
-    },
+ 
   },
   { timestamps: true }
 );
