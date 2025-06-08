@@ -5,7 +5,9 @@ const {
   addWaiterToGroup,
   manageTables,
   getAllSectionsWithGroups,
-  removeWaiterFromGroup // Import the new controller
+  removeWaiterFromGroup,
+  editGroup,
+  deleteGroup
 } = require("../controllers/groupController");
 const protect = require('../middlewares/authMiddleware');
 
@@ -17,9 +19,14 @@ router.use(protect);
 // Route to create a new group
 router.post("/", createGroup);
 
+// Route to edit a group (name only)
+router.put("/:groupId", editGroup);
+
+// Route to delete a group
+router.delete("/:groupId", deleteGroup);
+
 // Route to add a waiter to a group
 router.put("/:groupId/waiter", addWaiterToGroup);
-
 
 router.delete("/:groupId/waiter", removeWaiterFromGroup);
 

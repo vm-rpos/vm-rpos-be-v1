@@ -313,6 +313,104 @@ const getAllSectionsWithGroups = async (req, res) => {
     });
   }
 };
+const editGroup = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { name } = req.body;
+
+    // Check user authentication and restaurant assignment
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized: No restaurant assigned",
+      });
+    }
+
+    // Validate required field
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Group name is required" });
+    }
+
+    // Validate Group existence and ownership
+    const group = await Group.findOne({
+      _id: groupId,
+      restaurantId: req.user.restaurantId
+    });
+    
+    if (!group) {
+      return res.status(404).json({ error: "Group not found" });
+    }
+
+    // Update group name
+    group.name = name.trim();
+    await group.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Group name updated successfully",
+      data: group
+    });
+  } catch (error) {
+    console.error("Error in editGroup:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
+
+const deleteGroup = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    // Check user authentication and restaurant assignment
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized: No restaurant assigned",
+      });
+    }
+
+    // Validate Group existence and ownership
+    const group = await Group.findOne({
+      _id: groupId,
+      restaurantId: req.user.restaurantId
+    });
+    
+    if (!group) {
+      return res.status(404).json({ error: "Group not found" });
+    }
+
+    // Optional: Check if group has active tables with orders
+    if (group.tableIds && group.tableIds.length > 0) {
+      const tablesWithOrders = await Table.find({
+        _id: { $in: group.tableIds },
+        hasOrders: true
+      });
+
+      if (tablesWithOrders.length > 0) {
+        return res.status(400).json({
+          error: "Cannot delete group with tables that have active orders",
+          activeTablesCount: tablesWithOrders.length
+        });
+      }
+    }
+
+    // Delete the group
+    await Group.findByIdAndDelete(groupId);
+
+    res.status(200).json({
+      success: true,
+      message: "Group deleted successfully"
+    });
+  } catch (error) {
+    console.error("Error in deleteGroup:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
 
 module.exports = {
   createGroup,
@@ -320,5 +418,7 @@ module.exports = {
   addWaiterToGroup,
   manageTables,
   getAllSectionsWithGroups, 
-  removeWaiterFromGroup
+  removeWaiterFromGroup,
+  deleteGroup,
+  editGroup
 };
