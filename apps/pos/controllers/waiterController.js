@@ -17,7 +17,9 @@ const section=require('../models/Section')
 //Get all waiters based on User's RestaurantId
 exports.getAllWaiters = async (req, res) => {
   try {
+    
     const { restaurantId } = req.query;
+    console.log(restaurantId)
     if (!restaurantId) {
       return res.status(400).json({ message: "Restaurant ID is required" });
     }

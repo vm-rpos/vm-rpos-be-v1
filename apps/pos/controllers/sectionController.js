@@ -31,7 +31,7 @@ exports.getSectionsWithTables = async (req, res) => {
         .json({ message: "Unauthorized: No restaurant assigned" });
     }
 
-    const restaurantId = req.user.restaurantId;
+      const restaurantId = req.user.restaurantId;
 
     // Get all sections of the restaurant
     const sections = await Section.find({ restaurantId })
