@@ -4,6 +4,7 @@ const Waiter = require("../models/Waiter");
 const Table = require("../models/Table");
 const mongoose = require("mongoose");
 
+
 const getTableById = async (id) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -23,9 +24,17 @@ const getTableById = async (id) => {
         tableNumber: table.tableNumber,
         seats: table.seats,
         hasOrders: table.hasOrders,
-        waiter: table.waiter, // includes embedded waiter object if present
+        restaurantId: table.restaurantId,
+        sectionId: table.sectionId,
+        waiterId: table.waiterId,
+        waiter: table.waiter, // Embedded waiter object
+        currentOrderItems: table.currentOrderItems,
+        firstOrderTime: table.firstOrderTime,
+        currentBillAmount: table.currentBillAmount,
+        paymentMethod: table.paymentMethod,
+        billNumber: table.billNumber,
         createdAt: table.createdAt,
-        updatedAt: table.updatedAt,
+        updatedAt: table.updatedAt
       },
     };
   } catch (err) {
@@ -33,6 +42,8 @@ const getTableById = async (id) => {
     return { success: false, message: "Server error", error: err.message };
   }
 };
+
+
 
 const getWaiterById = async (id) => {
   try {
@@ -125,10 +136,9 @@ const addWaiterToGroup = async (req, res) => {
   }
 };
 
-const manageTables = async (req, res) => {
+const removeWaiterFromGroup = async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { tableIds } = req.body;
 
     // Validate Group existence
     const group = await Group.findById(groupId);
@@ -136,11 +146,56 @@ const manageTables = async (req, res) => {
       return res.status(404).json({ error: "Group not found" });
     }
 
-    // Update Group with table references
-    group.tableIds = tableIds;
+    // Remove waiterId (assuming it's a single reference)
+    group.waiterId = null;
     await group.save();
 
-    res.status(200).json({ message: "Tables assigned successfully", group });
+    res.status(200).json({ message: "Waiter removed successfully", group });
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error", details: error.message });
+  }
+};
+
+
+const manageTables = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { tableIds } = req.body;
+
+    // Validate input
+    if (!tableIds || !Array.isArray(tableIds)) {
+      return res.status(400).json({ error: "tableIds must be a valid array" });
+    }
+
+    // Validate Group existence
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: "Group not found" });
+    }
+
+    // Convert tableIds to ObjectIds for comparison
+    const tableObjectIds = tableIds.map(id => new mongoose.Types.ObjectId(id));
+
+    // Remove these tables from any other groups that currently have them
+    await Group.updateMany(
+      { 
+        _id: { $ne: groupId }, // Exclude the current group
+        tableIds: { $in: tableObjectIds } // Groups that have any of these tables
+      },
+      { 
+        $pullAll: { tableIds: tableObjectIds } // Remove all specified tables
+      }
+    );
+
+    // Update the current group with the new table references
+    group.tableIds = tableObjectIds;
+    await group.save();
+
+    res.status(200).json({ 
+      message: "Tables assigned successfully", 
+      group,
+      tablesAssigned: tableIds.length
+    });
   } catch (error) {
     res
       .status(500)
@@ -265,4 +320,5 @@ module.exports = {
   addWaiterToGroup,
   manageTables,
   getAllSectionsWithGroups, 
+  removeWaiterFromGroup
 };
