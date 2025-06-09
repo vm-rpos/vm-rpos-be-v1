@@ -1,166 +1,88 @@
 const IVMOrder = require("../models/IVMOrder");
-const Item = require("../models/Item");
-const Category = require("../models/Category");
+const IvmItem = require("../models/Item");
+const IvmCategory = require("../models/Category");
 
-// Get all spoilage records for a restaurant
+
+// GET all spoilage records for a restaurant
 exports.getAllSpoilageRecords = async (req, res) => {
   try {
     const restaurantId = req.user.restaurantId;
-    const { startDate, endDate, itemId, categoryId } = req.query;
 
-    // Build filter for spoilage orders
-    const filter = { 
+    const spoilageOrders = await IVMOrder.find({
       restaurantId,
-      orderType: 'spoilageOrder'
-    };
+      orderType: "spoilageOrder"
+    })
+      .sort({ createdAt: -1 })
+      
+      .select("-restaurantId -status -updatedAt -__v"); // exclude these fields from the root document
 
-    // Item filter (search within items array)
-    let matchStage = { $match: filter };
-    
-    // Date range filter
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
-    }
-
-    let pipeline = [matchStage];
-
-    // If filtering by itemId or categoryId, we need to unwind and match items
-    if (itemId || categoryId) {
-      pipeline.push(
-        { $unwind: "$items" },
-        {
-          $match: {
-            ...(itemId && { "items.itemId": itemId }),
-            ...(categoryId && { "items.categoryId": categoryId })
-          }
-        },
-        {
-          $group: {
-            _id: "$_id",
-            restaurantId: { $first: "$restaurantId" },
-            orderType: { $first: "$orderType" },
-            items: { $push: "$items" },
-            createdAt: { $first: "$createdAt" },
-            updatedAt: { $first: "$updatedAt" }
-          }
-        }
-      );
-    }
-
-    pipeline.push(
-      {
-        $lookup: {
-          from: "items",
-          localField: "items.itemId",
-          foreignField: "_id",
-          as: "itemDetails"
-        }
-      },
-      {
-        $lookup: {
-          from: "categories",
-          localField: "items.categoryId",
-          foreignField: "_id",
-          as: "categoryDetails"
-        }
-      },
-      { $sort: { createdAt: -1 } }
-    );
-
-    const spoilageRecords = await IVMOrder.aggregate(pipeline);
-
-    res.json(spoilageRecords);
-  } catch (err) {
-    console.error("Error getting spoilage records:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(200).json({  data: spoilageOrders });
+  } catch (error) {
+    console.error("Error fetching spoilage records:", error);
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
 
-// Create a new spoilage record
+
+
 exports.createSpoilageRecord = async (req, res) => {
   try {
-    const { items, reportedBy } = req.body;
-
     const restaurantId = req.user.restaurantId;
+    const { items } = req.body;
 
-    // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        message: "Items array is required and cannot be empty",
-      });
+      return res.status(400).json({ message: "Items array is required" });
     }
 
-    // Validate each item
-    for (const item of items) {
-      if (!item.itemId || !item.quantity || !item.reason) {
+    const detailedItems = [];
+
+    for (const spoilItem of items) {
+      const itemInDb = await IvmItem.findOne({
+        _id: spoilItem.itemId,
+        restaurantId,
+      });
+
+      if (!itemInDb) {
+        return res.status(404).json({ message: `Item not found: ${spoilItem.itemId}` });
+      }
+
+      if (spoilItem.quantity > itemInDb.quantity) {
         return res.status(400).json({
-          message: "Each item must have itemId, quantity, and reason",
-        });
-      }
-    }
-
-    // Process and validate items
-    const processedItems = [];
-    
-    for (const item of items) {
-      // Check item existence and restaurant ownership
-      const dbItem = await Item.findOne({ _id: item.itemId, restaurantId });
-      if (!dbItem) {
-        return res.status(404).json({
-          message: `Item ${item.itemId} not found or does not belong to your restaurant`,
+          message: `Insufficient quantity for item ${itemInDb.name}. Available: ${itemInDb.quantity}, requested spoil: ${spoilItem.quantity}`
         });
       }
 
-      if (dbItem.quantity < item.quantity) {
-        return res.status(400).json({
-          message: `Insufficient quantity for item ${dbItem.name}. Available: ${dbItem.quantity}`,
-        });
-      }
-
-      // Get category
-      const category = await Category.findById(dbItem.categoryId);
-      if (!category) {
-        return res.status(404).json({ 
-          message: `Category not found for item ${dbItem.name}` 
-        });
-      }
-
-      processedItems.push({
-        itemId: item.itemId,
-        name: dbItem.name,
-        quantity: item.quantity,
-        price: dbItem.price,
-        reason: item.reason,
-        reportedBy: reportedBy || "",
-        categoryId: dbItem.categoryId,
-        totalLossValue: item.quantity * dbItem.price
-      });
-
-      // Reduce the item quantity
-      await Item.findByIdAndUpdate(item.itemId, {
-        $inc: { quantity: -item.quantity }
+      detailedItems.push({
+        itemId: itemInDb._id,
+        name: itemInDb.name,
+        price: itemInDb.price,
+        quantity: spoilItem.quantity,
+        categoryId: itemInDb.categoryId,
+        restaurantId,
+        reason: spoilItem.reason || undefined // Add reason if provided
       });
     }
 
-    // Create the spoilage record as IVMOrder
     const spoilageOrder = new IVMOrder({
       restaurantId,
-      orderType: 'spoilageOrder',
-      items: processedItems
+      orderType: "spoilageOrder",
+      items: detailedItems,
     });
 
     await spoilageOrder.save();
 
-    // Populate the spoilage record
-    const populatedRecord = await IVMOrder.findById(spoilageOrder._id)
-      .populate("items.itemId", "name price")
-      .populate("items.categoryId", "name");
+    // Decrement inventory
+    for (const spoilItem of items) {
+      await IvmItem.findByIdAndUpdate(
+        spoilItem.itemId,
+        { $inc: { quantity: -spoilItem.quantity } }
+      );
+    }
 
-    res.status(201).json(populatedRecord);
-  } catch (err) {
-    console.error("Error creating spoilage record:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(201).json({ message: "Spoilage order created successfully", spoilageOrder });
+
+  } catch (error) {
+    console.error("Error creating spoilage order:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
