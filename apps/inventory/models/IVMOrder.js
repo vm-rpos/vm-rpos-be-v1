@@ -38,9 +38,17 @@ const IVMOrderSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
+         stockout: {
+          type: Number,
+          min: 0,
+        },
         quantity: {
           type: Number,
           required: true,
+          min: 0,
+        },
+        stockin: {
+          type: Number,
           min: 0,
         },
         price: {
@@ -52,13 +60,13 @@ const IVMOrderSchema = new mongoose.Schema(
           type: mongoose.Schema.Types.ObjectId,
           ref: "Category",
           required: function () {
-            return this.parent().orderType === "spoilageOrder";
+            return this.ownerDocument().orderType === "spoilageOrder";
           },
         },
         totalLossValue: {
           type: Number,
           default: function () {
-            if (this.parent().orderType === "spoilageOrder") {
+            if (this.ownerDocument().orderType === "spoilageOrder") {
               return this.quantity * this.price;
             }
             return undefined;

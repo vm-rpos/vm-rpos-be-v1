@@ -33,12 +33,30 @@ exports.createIVMOrder = async (req, res) => {
       }
     }
 
+    // Prepare items for the order - set stockout equal to quantity for stockout orders
+    const orderItems = items.map(item => {
+      const itemData = {
+        itemId: item.itemId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price
+      };
+
+      // Automatically set stockout = quantity for stockout orders
+      if (orderType === 'stockoutOrder') {
+        itemData.stockout = item.quantity;
+        itemData.stockin = 0; // Initialize stockin to 0
+      }
+
+      return itemData;
+    });
+
     const newOrder = new IVMOrder({
       restaurantId,
       orderType,
       vendorId: vendorId || null,
       destination: destination || null,
-      items,
+      items: orderItems,
       expectedDeliveryDate
     });
 
@@ -59,7 +77,7 @@ exports.createIVMOrder = async (req, res) => {
           item.itemId,
           {
             $inc: { quantity: item.quantity },
-            price:newAvgPrice ,
+            price: newAvgPrice,
             avgPrice: newAvgPrice,
             totalPurchaseValue: newTotalPurchaseValue
           },
@@ -521,6 +539,8 @@ exports.updateIVMOrder = async (req, res) => {
   }
 };
 
+
+
 // Delete an IVM Order
 exports.deleteIVMOrder = async (req, res) => {
   try {
@@ -577,4 +597,8 @@ exports.getOrderValues = async (req, res) => {
     res.status(500).json({ message: 'Error calculating order values', error });
   }
 };
+
+
+
+// stock in
 
