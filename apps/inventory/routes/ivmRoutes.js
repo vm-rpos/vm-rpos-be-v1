@@ -25,6 +25,9 @@ router.get('/:id', ivmOrderController.getIVMOrderById);
 // Update an order
 router.put('/:id', ivmOrderController.updateIVMOrder);
 
+
+router.put('/stockin/:id', ivmOrderController.updateStockoutItems);
+
 // Update order status
 router.put('/:id/status', ivmOrderController.updateOrderStatus);
 
