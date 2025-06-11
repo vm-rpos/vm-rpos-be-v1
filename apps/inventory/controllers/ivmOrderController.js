@@ -42,6 +42,7 @@ exports.createIVMOrder = async (req, res) => {
       return res.status(400).json({ message: "At least one item is required" });
     }
 
+    // Validate items based on order type
     for (const item of items) {
       if (!item.itemId || !item.name || !item.quantity || !item.price) {
         return res
@@ -49,6 +50,17 @@ exports.createIVMOrder = async (req, res) => {
           .json({
             message: "Each item must have itemId, name, quantity, and price",
           });
+      }
+
+      // Validate soldPrice for sale orders
+      if (orderType === "saleOrder") {
+        if (!item.soldPrice || item.soldPrice <= 0) {
+          return res
+            .status(400)
+            .json({
+              message: "Each item must have a valid soldPrice for sale orders",
+            });
+        }
       }
     }
 
@@ -60,6 +72,11 @@ exports.createIVMOrder = async (req, res) => {
         quantity: item.quantity,
         price: item.price,
       };
+
+      // Add soldPrice for sale orders
+      if (orderType === "saleOrder") {
+        itemData.soldPrice = item.soldPrice;
+      }
 
       // Automatically set stockout = quantity for stockout orders
       if (orderType === "stockoutOrder") {

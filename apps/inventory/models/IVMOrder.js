@@ -56,6 +56,13 @@ const IVMOrderSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        soldPrice: {
+          type: Number,
+          min: 0,
+          required: function () {
+            return this.ownerDocument().orderType === "saleOrder";
+          },
+        },
         categoryId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Category",
