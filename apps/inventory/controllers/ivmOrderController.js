@@ -10,56 +10,62 @@ const { startOfDay, startOfWeek, startOfMonth, endOfDay } = require("date-fns");
 // Create an IVM Order
 exports.createIVMOrder = async (req, res) => {
   try {
-    const { orderType, vendorId, destination, items, expectedDeliveryDate } =
-      req.body;
+    const { orderType, vendorId, destination, items, expectedDeliveryDate, saveFlag = false } = req.body;
     const restaurantId = req.user?.restaurantId;
     console.log("restaurantId from token:", restaurantId);
 
     if (!restaurantId) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized: restaurantId missing" });
+      return res.status(401).json({ message: "Unauthorized: restaurantId missing" });
     }
 
-    if (orderType === "purchaseOrder" && !vendorId) {
-      return res
-        .status(400)
-        .json({ message: "Vendor is required for purchase orders" });
-    }
-
-    if (
-      (orderType === "saleOrder" || orderType === "stockoutOrder") &&
-      !destination
-    ) {
-      return res
-        .status(400)
-        .json({
-          message: "Destination is required for sale or stockout orders",
-        });
+    // Basic validation (required even for drafts)
+    if (!orderType) {
+      return res.status(400).json({ message: "Order type is required" });
     }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "At least one item is required" });
     }
 
+    // For drafts, we skip most validations and calculations
+    if (saveFlag === false) {
+      const newOrder = new IVMOrder({
+        restaurantId,
+        orderType,
+        vendorId: vendorId || null,
+        destination: destination || null,
+        items,
+        expectedDeliveryDate: expectedDeliveryDate || null,
+        saveFlag: false
+      });
+
+      const savedOrder = await newOrder.save();
+      const populatedOrder = await IVMOrder.findById(savedOrder._id)
+        .populate("vendorId")
+        .populate("items.itemId");
+
+      return res.status(201).json(populatedOrder);
+    }
+
+    // Full validation for non-draft orders
+    if (orderType === "purchaseOrder" && !vendorId) {
+      return res.status(400).json({ message: "Vendor is required for purchase orders" });
+    }
+
+    if ((orderType === "saleOrder" || orderType === "stockoutOrder") && !destination) {
+      return res.status(400).json({ message: "Destination is required for sale or stockout orders" });
+    }
+
     // Validate items based on order type
     for (const item of items) {
       if (!item.itemId || !item.name || !item.quantity || !item.price) {
-        return res
-          .status(400)
-          .json({
-            message: "Each item must have itemId, name, quantity, and price",
-          });
+        return res.status(400).json({ message: "Each item must have itemId, name, quantity, and price" });
       }
 
       // Validate soldPrice for sale orders
       if (orderType === "saleOrder") {
         if (!item.soldPrice || item.soldPrice <= 0) {
-          return res
-            .status(400)
-            .json({
-              message: "Each item must have a valid soldPrice for sale orders",
-            });
+          return res.status(400).json({ message: "Each item must have a valid soldPrice for sale orders" });
         }
       }
     }
@@ -94,25 +100,22 @@ exports.createIVMOrder = async (req, res) => {
       destination: destination || null,
       items: orderItems,
       expectedDeliveryDate,
+      saveFlag: true // Mark as finalized
     });
 
     const savedOrder = await newOrder.save();
 
+    // Perform inventory calculations only for finalized orders
     if (orderType === "purchaseOrder") {
       for (const item of items) {
         const existingItem = await Item.findById(item.itemId);
         if (!existingItem) {
-          return res
-            .status(404)
-            .json({ message: `Item with ID ${item.itemId} not found` });
+          return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
         }
 
         const newTotalQuantity = existingItem.quantity + item.quantity;
-        const newTotalPurchaseValue =
-          (existingItem.totalPurchaseValue || 0) + item.price * item.quantity;
-        const newAvgPrice = parseFloat(
-          (newTotalPurchaseValue / newTotalQuantity).toFixed(2)
-        );
+        const newTotalPurchaseValue = (existingItem.totalPurchaseValue || 0) + item.price * item.quantity;
+        const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
 
         await Item.findByIdAndUpdate(
           item.itemId,
@@ -142,6 +145,197 @@ exports.createIVMOrder = async (req, res) => {
     res.status(201).json(populatedOrder);
   } catch (err) {
     console.error("Error creating IVM order:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+exports.updateIVMOrder = async (req, res) => {
+  try {
+    const {
+      orderType,
+      vendorId,
+      destination,
+      items,
+      expectedDeliveryDate,
+      status,
+      saveFlag
+    } = req.body;
+
+    // Find the existing order
+    const existingOrder = await IVMOrder.findById(req.params.id);
+    if (!existingOrder) {
+      return res.status(404).json({ message: "IVM order not found" });
+    }
+
+    // If updating to draft (saveFlag: false), just save the data without calculations
+    if (saveFlag === false) {
+      const updateData = {
+        orderType,
+        vendorId,
+        destination,
+        items,
+        expectedDeliveryDate,
+        status,
+        saveFlag: false
+      };
+
+      const updatedOrder = await IVMOrder.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      ).populate("vendorId").populate("items.itemId");
+
+      return res.json(updatedOrder);
+    }
+
+    // If updating to finalized (saveFlag: true), perform full validation and calculations
+    if (existingOrder.saveFlag === false) {
+      // This was previously a draft, now we need to process it as a new order
+      // First validate the data
+      if (orderType === "purchaseOrder" && !vendorId) {
+        return res.status(400).json({ message: "Vendor is required for purchase orders" });
+      }
+
+      if ((orderType === "saleOrder" || orderType === "stockoutOrder") && !destination) {
+        return res.status(400).json({ message: "Destination is required for sale or stockout orders" });
+      }
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "At least one item is required" });
+      }
+
+      for (const item of items) {
+        if (!item.itemId || !item.name || !item.quantity || !item.price) {
+          return res.status(400).json({
+            message: "Each item must have itemId, name, quantity, and price",
+          });
+        }
+
+        if (orderType === "saleOrder" && (!item.soldPrice || item.soldPrice <= 0)) {
+          return res.status(400).json({
+            message: "Each item must have a valid soldPrice for sale orders",
+          });
+        }
+      }
+    }
+
+    const updateData = {
+      orderType,
+      vendorId,
+      destination,
+      items,
+      expectedDeliveryDate,
+      status,
+      saveFlag: true // Mark as finalized
+    };
+
+    // If this was previously a draft, perform inventory calculations as if it's a new order
+    if (existingOrder.saveFlag === false) {
+      if (orderType === "purchaseOrder") {
+        for (const item of items) {
+          const existingItem = await Item.findById(item.itemId);
+          if (!existingItem) {
+            return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
+          }
+
+          const newTotalQuantity = existingItem.quantity + item.quantity;
+          const newTotalPurchaseValue = (existingItem.totalPurchaseValue || 0) + item.price * item.quantity;
+          const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
+
+          await Item.findByIdAndUpdate(
+            item.itemId,
+            {
+              $inc: { quantity: item.quantity },
+              price: newAvgPrice,
+              avgPrice: newAvgPrice,
+              totalPurchaseValue: newTotalPurchaseValue,
+            },
+            { new: true }
+          );
+        }
+      } else if (orderType === "saleOrder" || orderType === "stockoutOrder") {
+        for (const item of items) {
+          await Item.findByIdAndUpdate(
+            item.itemId,
+            { $inc: { quantity: -item.quantity } },
+            { new: true }
+          );
+        }
+      }
+    } else {
+      // For previously finalized orders, handle quantity adjustments
+      if (existingOrder.orderType === "purchaseOrder") {
+        // Revert previous quantities and purchase values
+        for (const existingItem of existingOrder.items) {
+          const existingItemData = await Item.findById(existingItem.itemId);
+          if (!existingItemData) continue;
+
+          const newTotalQuantity = existingItemData.quantity - existingItem.quantity;
+          const newTotalPurchaseValue = existingItemData.totalPurchaseValue - (existingItem.price * existingItem.quantity);
+          const newAvgPrice = newTotalQuantity > 0 
+            ? parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2))
+            : 0;
+
+          await Item.findByIdAndUpdate(existingItem.itemId, {
+            quantity: newTotalQuantity,
+            totalPurchaseValue: newTotalPurchaseValue,
+            price: newAvgPrice,
+            avgPrice: newAvgPrice,
+          });
+        }
+
+        // Add new quantities and update purchase values
+        for (const item of items) {
+          const existingItemData = await Item.findById(item.itemId);
+          if (!existingItemData) {
+            return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
+          }
+
+          const newTotalQuantity = existingItemData.quantity + item.quantity;
+          const newTotalPurchaseValue = (existingItemData.totalPurchaseValue || 0) + (item.price * item.quantity);
+          const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
+
+          await Item.findByIdAndUpdate(
+            item.itemId,
+            {
+              quantity: newTotalQuantity,
+              price: newAvgPrice,
+              avgPrice: newAvgPrice,
+              totalPurchaseValue: newTotalPurchaseValue,
+            },
+            { new: true }
+          );
+        }
+      } else if (existingOrder.orderType === "saleOrder" || existingOrder.orderType === "stockoutOrder") {
+        // Revert previous quantities (add back what was subtracted)
+        for (const existingItem of existingOrder.items) {
+          await Item.findByIdAndUpdate(existingItem.itemId, {
+            $inc: { quantity: existingItem.quantity },
+          });
+        }
+
+        // Subtract new quantities
+        for (const item of items) {
+          await Item.findByIdAndUpdate(
+            item.itemId,
+            { $inc: { quantity: -item.quantity } },
+            { new: true }
+          );
+        }
+      }
+    }
+
+    const updatedOrder = await IVMOrder.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    )
+      .populate("vendorId")
+      .populate("items.itemId");
+
+    res.json(updatedOrder);
+  } catch (err) {
+    console.error("Error updating IVM order:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
@@ -578,131 +772,7 @@ exports.getIVMOrderById = async (req, res) => {
 };
 
 // Update an IVM Order
-exports.updateIVMOrder = async (req, res) => {
-  try {
-    const {
-      orderType,
-      vendorId,
-      destination,
-      items,
-      expectedDeliveryDate,
-      status,
-    } = req.body;
 
-    // Find the existing order
-    const existingOrder = await IVMOrder.findById(req.params.id);
-    if (!existingOrder) {
-      return res.status(404).json({ message: "IVM order not found" });
-    }
-
-    // Validate items if they are being updated
-    if (items) {
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "At least one item is required" });
-      }
-
-      for (const item of items) {
-        if (!item.itemId || !item.name || !item.quantity || !item.price) {
-          return res.status(400).json({
-            message: "Each item must have itemId, name, quantity, and price",
-          });
-        }
-
-        if (orderType === "saleOrder" && (!item.soldPrice || item.soldPrice <= 0)) {
-          return res.status(400).json({
-            message: "Each item must have a valid soldPrice for sale orders",
-          });
-        }
-      }
-    }
-
-    const updateData = {};
-    if (orderType) updateData.orderType = orderType;
-    if (vendorId) updateData.vendorId = vendorId;
-    if (destination) updateData.destination = destination;
-    if (expectedDeliveryDate) updateData.expectedDeliveryDate = expectedDeliveryDate;
-    if (status) updateData.status = status;
-
-    // Update order items and quantities
-    if (items) {
-      updateData.items = items;
-
-      // Handle quantity adjustments based on order type
-      if (existingOrder.orderType === "purchaseOrder") {
-        // Revert previous quantities and purchase values
-        for (const existingItem of existingOrder.items) {
-          const existingItemData = await Item.findById(existingItem.itemId);
-          if (!existingItemData) continue;
-
-          const newTotalQuantity = existingItemData.quantity - existingItem.quantity;
-          const newTotalPurchaseValue = existingItemData.totalPurchaseValue - (existingItem.price * existingItem.quantity);
-          const newAvgPrice = newTotalQuantity > 0 
-            ? parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2))
-            : 0;
-
-          await Item.findByIdAndUpdate(existingItem.itemId, {
-            quantity: newTotalQuantity,
-            totalPurchaseValue: newTotalPurchaseValue,
-            price: newAvgPrice,
-            avgPrice: newAvgPrice,
-          });
-        }
-
-        // Add new quantities and update purchase values
-        for (const item of items) {
-          const existingItemData = await Item.findById(item.itemId);
-          if (!existingItemData) {
-            return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
-          }
-
-          const newTotalQuantity = existingItemData.quantity + item.quantity;
-          const newTotalPurchaseValue = (existingItemData.totalPurchaseValue || 0) + (item.price * item.quantity);
-          const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
-
-          await Item.findByIdAndUpdate(
-            item.itemId,
-            {
-              quantity: newTotalQuantity,
-              price: newAvgPrice,
-              avgPrice: newAvgPrice,
-              totalPurchaseValue: newTotalPurchaseValue,
-            },
-            { new: true }
-          );
-        }
-      } else if (existingOrder.orderType === "saleOrder" || existingOrder.orderType === "stockoutOrder") {
-        // Revert previous quantities (add back what was subtracted)
-        for (const existingItem of existingOrder.items) {
-          await Item.findByIdAndUpdate(existingItem.itemId, {
-            $inc: { quantity: existingItem.quantity },
-          });
-        }
-
-        // Subtract new quantities
-        for (const item of items) {
-          await Item.findByIdAndUpdate(
-            item.itemId,
-            { $inc: { quantity: -item.quantity } },
-            { new: true }
-          );
-        }
-      }
-    }
-
-    const updatedOrder = await IVMOrder.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    )
-      .populate("vendorId")
-      .populate("items.itemId");
-
-    res.json(updatedOrder);
-  } catch (err) {
-    console.error("Error updating IVM order:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
 
 // Delete an IVM Order
 exports.deleteIVMOrder = async (req, res) => {

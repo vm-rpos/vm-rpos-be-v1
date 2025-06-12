@@ -38,7 +38,7 @@ const IVMOrderSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
-         stockout: {
+        stockout: {
           type: Number,
           min: 0,
         },
@@ -96,6 +96,10 @@ const IVMOrderSchema = new mongoose.Schema(
         return this.orderType !== "spoilageOrder";
       },
     },
+    saveFlag: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,
