@@ -15,7 +15,7 @@ exports.getAllVendors = async (req, res) => {
 // Create a new vendor
 exports.createVendor = async (req, res) => {
   try {
-    const { name, age, phoneNumber, location } = req.body;
+    const { name, age, phoneNumber, location,tags } = req.body;
 
     const restaurantId = req.user.restaurantId;
 
@@ -29,7 +29,7 @@ exports.createVendor = async (req, res) => {
       return res.status(400).json({ message: 'Phone number already exists' });
     }
 
-    const newVendor = new Vendor({ name, age, phoneNumber, location,restaurantId });
+    const newVendor = new Vendor({ name, age, phoneNumber,tags:Array.isArray(tags)?tags:[], location,restaurantId });
     await newVendor.save();
 
     res.status(201).json(newVendor);
@@ -62,6 +62,7 @@ exports.updateVendor = async (req, res) => {
     if (age) updateData.age = age;
     if (phoneNumber) updateData.phoneNumber = phoneNumber;
     if (location) updateData.location = location;
+    if (Array.isArray(tags))  updateData.tags=tags;
 
     const updatedVendor = await Vendor.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedVendor) return res.status(404).json({ message: 'Vendor not found' });
