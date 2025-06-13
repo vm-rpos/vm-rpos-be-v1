@@ -42,7 +42,7 @@ exports.createIVMOrder = async (req, res) => {
       const savedOrder = await newOrder.save();
       const populatedOrder = await IVMOrder.findById(savedOrder._id)
         .populate("vendorId")
-        .populate("items.itemId");
+        .populate("items.itemId.$oid");
 
       return res.status(201).json(populatedOrder);
     }
@@ -140,7 +140,7 @@ exports.createIVMOrder = async (req, res) => {
 
     const populatedOrder = await IVMOrder.findById(savedOrder._id)
       .populate("vendorId")
-      .populate("items.itemId");
+      .populate("items.itemId.$oid");
 
     res.status(201).json(populatedOrder);
   } catch (err) {
@@ -183,7 +183,7 @@ exports.updateIVMOrder = async (req, res) => {
         req.params.id,
         updateData,
         { new: true, runValidators: true }
-      ).populate("vendorId").populate("items.itemId");
+      ).populate("vendorId").populate("items.itemId.$oid");
 
       return res.json(updatedOrder);
     }
@@ -245,7 +245,7 @@ exports.updateIVMOrder = async (req, res) => {
           await Item.findByIdAndUpdate(
             item.itemId,
             {
-              $inc: { quantity: item.quantity },
+              quantity: newTotalQuantity,
               price: newAvgPrice,
               avgPrice: newAvgPrice,
               totalPurchaseValue: newTotalPurchaseValue,
@@ -263,15 +263,16 @@ exports.updateIVMOrder = async (req, res) => {
         }
       }
     } else {
-      // For previously finalized orders, handle quantity adjustments
-      if (existingOrder.orderType === "purchaseOrder") {
+      // For previously finalized orders (saveFlag was already true), handle quantity adjustments
+      if (existingOrder.orderType === "purchaseOrder" && orderType === "purchaseOrder") {
         // Revert previous quantities and purchase values
         for (const existingItem of existingOrder.items) {
           const existingItemData = await Item.findById(existingItem.itemId);
           if (!existingItemData) continue;
 
-          const newTotalQuantity = existingItemData.quantity - existingItem.quantity;
-          const newTotalPurchaseValue = existingItemData.totalPurchaseValue - (existingItem.price * existingItem.quantity);
+          const newTotalQuantity = Math.max(0, existingItemData.quantity - existingItem.quantity);
+          const revertPurchaseValue = existingItem.price * existingItem.quantity;
+          const newTotalPurchaseValue = Math.max(0, existingItemData.totalPurchaseValue - revertPurchaseValue);
           const newAvgPrice = newTotalQuantity > 0 
             ? parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2))
             : 0;
@@ -292,8 +293,11 @@ exports.updateIVMOrder = async (req, res) => {
           }
 
           const newTotalQuantity = existingItemData.quantity + item.quantity;
-          const newTotalPurchaseValue = (existingItemData.totalPurchaseValue || 0) + (item.price * item.quantity);
-          const newAvgPrice = parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2));
+          const addPurchaseValue = item.price * item.quantity;
+          const newTotalPurchaseValue = existingItemData.totalPurchaseValue + addPurchaseValue;
+          const newAvgPrice = newTotalQuantity > 0 
+            ? parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2))
+            : 0;
 
           await Item.findByIdAndUpdate(
             item.itemId,
@@ -306,7 +310,8 @@ exports.updateIVMOrder = async (req, res) => {
             { new: true }
           );
         }
-      } else if (existingOrder.orderType === "saleOrder" || existingOrder.orderType === "stockoutOrder") {
+      } else if ((existingOrder.orderType === "saleOrder" || existingOrder.orderType === "stockoutOrder") && 
+                 (orderType === "saleOrder" || orderType === "stockoutOrder")) {
         // Revert previous quantities (add back what was subtracted)
         for (const existingItem of existingOrder.items) {
           await Item.findByIdAndUpdate(existingItem.itemId, {
@@ -322,6 +327,71 @@ exports.updateIVMOrder = async (req, res) => {
             { new: true }
           );
         }
+      } else {
+        // Handle order type changes (e.g., from purchase to sale or vice versa)
+        // First revert the existing order's effect
+        if (existingOrder.orderType === "purchaseOrder") {
+          for (const existingItem of existingOrder.items) {
+            const existingItemData = await Item.findById(existingItem.itemId);
+            if (!existingItemData) continue;
+
+            const newTotalQuantity = Math.max(0, existingItemData.quantity - existingItem.quantity);
+            const revertPurchaseValue = existingItem.price * existingItem.quantity;
+            const newTotalPurchaseValue = Math.max(0, existingItemData.totalPurchaseValue - revertPurchaseValue);
+            const newAvgPrice = newTotalQuantity > 0 
+              ? parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2))
+              : 0;
+
+            await Item.findByIdAndUpdate(existingItem.itemId, {
+              quantity: newTotalQuantity,
+              totalPurchaseValue: newTotalPurchaseValue,
+              price: newAvgPrice,
+              avgPrice: newAvgPrice,
+            });
+          }
+        } else if (existingOrder.orderType === "saleOrder" || existingOrder.orderType === "stockoutOrder") {
+          for (const existingItem of existingOrder.items) {
+            await Item.findByIdAndUpdate(existingItem.itemId, {
+              $inc: { quantity: existingItem.quantity },
+            });
+          }
+        }
+
+        // Apply the new order's effect
+        if (orderType === "purchaseOrder") {
+          for (const item of items) {
+            const existingItemData = await Item.findById(item.itemId);
+            if (!existingItemData) {
+              return res.status(404).json({ message: `Item with ID ${item.itemId} not found` });
+            }
+
+            const newTotalQuantity = existingItemData.quantity + item.quantity;
+            const addPurchaseValue = item.price * item.quantity;
+            const newTotalPurchaseValue = existingItemData.totalPurchaseValue + addPurchaseValue;
+            const newAvgPrice = newTotalQuantity > 0 
+              ? parseFloat((newTotalPurchaseValue / newTotalQuantity).toFixed(2))
+              : 0;
+
+            await Item.findByIdAndUpdate(
+              item.itemId,
+              {
+                quantity: newTotalQuantity,
+                price: newAvgPrice,
+                avgPrice: newAvgPrice,
+                totalPurchaseValue: newTotalPurchaseValue,
+              },
+              { new: true }
+            );
+          }
+        } else if (orderType === "saleOrder" || orderType === "stockoutOrder") {
+          for (const item of items) {
+            await Item.findByIdAndUpdate(
+              item.itemId,
+              { $inc: { quantity: -item.quantity } },
+              { new: true }
+            );
+          }
+        }
       }
     }
 
@@ -331,7 +401,7 @@ exports.updateIVMOrder = async (req, res) => {
       { new: true, runValidators: true }
     )
       .populate("vendorId")
-      .populate("items.itemId");
+      .populate("items.itemId.$oid");
 
     res.json(updatedOrder);
   } catch (err) {
@@ -354,7 +424,7 @@ exports.getAllIVMOrders = async (req, res) => {
 
     const orders = await IVMOrder.find({ restaurantId })
       .populate("vendorId")
-      .populate("items.itemId");
+      .populate("items.itemId.$oid");
 
     console.log("Fetched orders count:", orders.length);
     res.json(orders);
@@ -461,7 +531,7 @@ exports.getOrdersByType = async (req, res) => {
             { "items.name": searchRegex },
             { "items.reason": searchRegex },
             { "items.reportedBy": searchRegex },
-            { "items.itemId": { $in: itemIds } },
+            { "items.itemId.$oid": { $in: itemIds } },
             { notes: searchRegex },
           ],
         };
@@ -478,7 +548,7 @@ exports.getOrdersByType = async (req, res) => {
             { vendorId: { $in: vendorIds } },
             { "items.name": searchRegex },
             { status: searchRegex },
-            { "items.itemId": { $in: itemIds } },
+            { "items.itemId.$oid": { $in: itemIds } },
             { destination: searchRegex },
             { notes: searchRegex },
           ],
@@ -585,7 +655,7 @@ exports.getPurchaseOrderStats = async (req, res) => {
           { vendorId: { $in: vendorIds } },
           { "items.name": searchRegex },
           { status: searchRegex },
-          { "items.itemId": { $in: itemIds } },
+          { "items.itemId.$oid": { $in: itemIds } },
         ],
       };
     }
@@ -595,7 +665,7 @@ exports.getPurchaseOrderStats = async (req, res) => {
       : filter;
 
     const purchaseOrders = await IVMOrder.find(finalFilter).populate(
-      "items.itemId"
+      "items.itemId.$oid"
     );
 
     let totalItems = 0,
@@ -652,7 +722,7 @@ exports.getSaleOrderStats = async (req, res) => {
       if (startDate) filter.expectedDeliveryDate = { $gte: startDate };
     }
 
-    const saleOrders = await IVMOrder.find(filter).populate("items.itemId");
+    const saleOrders = await IVMOrder.find(filter).populate("items.itemId.$oid");
 
     let totalItems = 0,
       totalAmount = 0;
@@ -708,7 +778,7 @@ exports.getStockoutOrderStats = async (req, res) => {
       if (startDate) filter.expectedDeliveryDate = { $gte: startDate };
     }
 
-    const stockoutOrders = await IVMOrder.find(filter).populate("items.itemId");
+    const stockoutOrders = await IVMOrder.find(filter).populate("items.itemId.$oid");
 
     let totalItems = 0,
       totalAmount = 0;
@@ -760,7 +830,7 @@ exports.getIVMOrderById = async (req, res) => {
   try {
     const order = await IVMOrder.findById(req.params.id)
       .populate("vendorId")
-      .populate("items.itemId");
+      .populate("items.itemId.$oid");
 
     if (!order) return res.status(404).json({ message: "IVM order not found" });
 
