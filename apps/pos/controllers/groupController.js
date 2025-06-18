@@ -113,14 +113,14 @@ const addWaiterToGroup = async (req, res) => {
     const { waiterId } = req.body;
 
     // Validate Group existence
-    const group = await Group.findById(groupId);
+    const group = await Group.findById(groupId).populate('waiterId');
     if (!group) {
       return res.status(404).json({ error: "Group not found" });
     }
 
     // Validate Waiter existence
-    const waiterExists = await Waiter.findById(waiterId);
-    if (!waiterExists) {
+    const waiter = await Waiter.findById(waiterId);
+    if (!waiter) {
       return res.status(404).json({ error: "Waiter not found" });
     }
 
@@ -128,11 +128,27 @@ const addWaiterToGroup = async (req, res) => {
     group.waiterId = waiterId;
     await group.save();
 
+    // Prepare preferred waiter data
+    const preferredWaiterData = {
+      _id: waiter._id,
+      name: waiter.name,
+      phoneNumber: waiter.phoneNumber
+    };
+
+    // Update all tables in the group with preferredWaiter
+    if (group.tableIds && group.tableIds.length > 0) {
+      await Table.updateMany(
+        { _id: { $in: group.tableIds } },
+        { $set: { preferedwaiter: preferredWaiterData } }
+      );
+    }
+
     res.status(200).json({ message: "Waiter assigned successfully", group });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Internal server error", details: error.message });
+    res.status(500).json({ 
+      error: "Internal server error", 
+      details: error.message 
+    });
   }
 };
 
@@ -146,13 +162,24 @@ const removeWaiterFromGroup = async (req, res) => {
       return res.status(404).json({ error: "Group not found" });
     }
 
-    // Remove waiterId (assuming it's a single reference)
+    // Remove waiterId from group
     group.waiterId = null;
     await group.save();
 
+    // Remove preferredWaiter from all tables in the group
+    if (group.tableIds && group.tableIds.length > 0) {
+      await Table.updateMany(
+        { _id: { $in: group.tableIds } },
+        { $unset: { preferedwaiter: "" } }
+      );
+    }
+
     res.status(200).json({ message: "Waiter removed successfully", group });
   } catch (error) {
-    res.status(500).json({ error: "Internal server error", details: error.message });
+    res.status(500).json({ 
+      error: "Internal server error", 
+      details: error.message 
+    });
   }
 };
 

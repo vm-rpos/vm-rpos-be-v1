@@ -21,6 +21,17 @@ const WaiterSchema = new mongoose.Schema({
   phoneNumber: { type: String }
 });
 
+
+const PreferedWaiterSchema = new mongoose.Schema({
+  _id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Waiter',
+    required: true
+  },
+  name: { type: String, required: true },
+  phoneNumber: { type: String }
+});
+
 const TableSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   tableNumber: { type: Number, required: true },
@@ -40,7 +51,9 @@ const TableSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Waiter'
   },
+  
   waiter: WaiterSchema, // Added waiter object schema
+  preferedwaiter:PreferedWaiterSchema,
   currentOrderItems: [TableOrderItemSchema],
   firstOrderTime: Date,
   currentBillAmount: { type: Number, default: 0 },
