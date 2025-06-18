@@ -75,6 +75,8 @@ exports.getSectionsWithTables = async (req, res) => {
           orderTime: table.firstOrderTime || null,
           totalItems,
           hasOrders: table.hasOrders,
+          preferedwaiter:table.preferedwaiter||null,
+
         });
       }
 
@@ -470,6 +472,7 @@ exports.getSectionsWithTablesdata = async (req, res) => {
           tableId: table._id,
           tableNumber: table.tableNumber,
           tableName: table.name,
+          
         });
       }
       

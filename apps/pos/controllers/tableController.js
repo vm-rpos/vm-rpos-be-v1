@@ -69,6 +69,7 @@ exports.getAllTables = async (req, res) => {
           currentOrderItems: table.currentOrderItems || [],
           firstOrderTime: table.firstOrderTime || null,
           waiter: table.waiter || null,
+          preferedwaiter:table.preferedwaiter||null,
           createdAt: table.createdAt,
           updatedAt: table.updatedAt,
         };
