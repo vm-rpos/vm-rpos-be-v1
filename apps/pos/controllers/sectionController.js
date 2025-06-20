@@ -232,6 +232,7 @@ exports.createSection = async (req, res) => {
 
 // Get a single section by ID
 exports.getSectionById = async (req, res) => {
+  console.log("ID FUNCTION IS GETTING  CALLED ")
   try {
     const section = await Section.findOne({
       _id: req.params.id,
@@ -487,5 +488,67 @@ exports.getSectionsWithTablesdata = async (req, res) => {
   } catch (err) {
     console.error("Error fetching sections with tables:", err);
     res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+
+// Get all sections with live table data (total, occupied, available counts)
+exports.getSectionWithLiveTableData = async (req, res) => {
+  try {
+    // Check user authentication and restaurant assignment
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ 
+        success: false,
+        message: "Unauthorized: No restaurant assigned" 
+      });
+    }
+
+    const restaurantId = req.user.restaurantId;
+
+    // Get all sections for the restaurant
+    const sections = await Section.find({ restaurantId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const responseData = [];
+
+    for (const section of sections) {
+      // Get all tables for this section
+      const tables = await Table.find({
+        sectionId: section._id,
+        restaurantId,
+      }).lean();
+
+      const totalTables = tables.length;
+      
+      // Count occupied tables (tables with orders)
+      const occupiedTables = tables.filter(table => table.hasOrders).length;
+      
+      // Calculate available tables
+      const availableTables = totalTables - occupiedTables;
+
+      responseData.push({
+        sectionId: section._id,
+        section: section.section,
+        total: totalTables,
+        occupied: occupiedTables,
+        available: availableTables,
+        occupancyPercentage: totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Section live table data retrieved successfully",
+      data: responseData
+    });
+
+  } catch (err) {
+    console.error("Error fetching section live table data:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error", 
+      error: err.message 
+    });
   }
 };

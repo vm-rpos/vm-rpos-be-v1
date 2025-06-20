@@ -9,6 +9,7 @@ router.post('/', sectionController.createSection);
 router.get('/', sectionController.getAllSections);
 router.get('/sectionsWithTables', sectionController.getSectionsWithTables);
 router.get('/sectionsWithTablesdata', sectionController.getSectionsWithTablesdata);
+router.get('/sectionslivedata', sectionController.getSectionWithLiveTableData);
 
 router.get('/:id', sectionController.getSectionById);
 router.put('/:id', sectionController.updateSection);
