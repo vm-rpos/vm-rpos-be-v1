@@ -25,7 +25,9 @@ const spoilageRoutes = require("./apps/inventory/routes/spoilageRoutes");
 
 const usersRoutes = require("./apps/pos/routes/usersRoutes");
 const superroutes = require("./apps/pos/routes/superRoutes");
-const groupRoutes=require("./apps/pos/routes/groupRoutes")
+const groupRoutes = require("./apps/pos/routes/groupRoutes");
+
+const mobileRoutes = require("./apps/pos/routes/mobileRoutes");
 
 require("dotenv").config();
 const app = express();
@@ -56,8 +58,9 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/sections", sectionRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/super", superroutes);
-app.use("/api/groups",groupRoutes);
+app.use("/api/groups", groupRoutes);
 
+app.use("/api/mobile", mobileRoutes);
 
 // Inventory API Routes
 app.use("/api-ivm/categories", categoryIvmRoutes); //done

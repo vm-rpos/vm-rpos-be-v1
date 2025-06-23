@@ -533,7 +533,8 @@ exports.getSectionWithLiveTableData = async (req, res) => {
         total: totalTables,
         occupied: occupiedTables,
         available: availableTables,
-        occupancyPercentage: totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0
+        occupancyPercentage: totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0,
+        charges:section.charges||[]
       });
     }
 
