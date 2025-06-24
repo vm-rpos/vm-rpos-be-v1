@@ -19,7 +19,6 @@ exports.getAllWaiters = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
 
-    console.log(restaurantId)
     if (!restaurantId) {
       return res.status(400).json({ message: "Restaurant ID is required" });
     }

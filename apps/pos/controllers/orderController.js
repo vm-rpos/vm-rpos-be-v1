@@ -7,7 +7,6 @@ exports.getAllOrders = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
     const role = req.user?.role;
-    console.log("User role:", role);
 
     if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({ message: "Invalid or missing restaurant ID in token" });
@@ -182,7 +181,6 @@ exports.getOrderMetrics = async (req, res) => {
   try {
     const restaurantId = req.user?.restaurantId;
     const role = req.user?.role;
-    console.log("User role:", role);
 
     const {timeRange = "all", startDateTime, endDateTime, customStartDate, customEndDate } = req.query;
 
