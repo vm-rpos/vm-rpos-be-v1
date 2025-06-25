@@ -1,4 +1,6 @@
 const User = require("../models/User");
+const Waiter = require('../models/Waiter');
+
 const {
   generateTokens,
   cleanExpiredTokens,
@@ -45,18 +47,27 @@ exports.signup = async (req, res) => {
     // Validate role
     if (
       !role ||
-      !["admin", "pos", "ivm", "superadmin", "salesadmin"].includes(role)
+      !["admin", "pos", "ivm", "superadmin", "salesadmin","waiter"].includes(role)
     ) {
       console.log("Signup failed: Invalid role");
       return res
         .status(400)
-        .json({ error: "Role must be either 'admin' or 'pos' or 'ivm' " });
+        .json({ error: "Role must be either 'admin' or 'pos' or 'ivm' or 'waiter' " });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
       console.log("Signup failed: Email already exists");
       return res.status(400).json({ error: "Email already in use" });
+    }
+
+    // If role is waiter, check if phone number already exists in Waiter collection
+    if (role === "waiter") {
+      const existingWaiter = await Waiter.findOne({ phoneNumber: phonenumber });
+      if (existingWaiter) {
+        console.log("Signup failed: Phone number already exists in waiter records");
+        return res.status(400).json({ error: "Phone number already exists" });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -86,6 +97,30 @@ exports.signup = async (req, res) => {
 
     await newUser.save();
 
+    // If role is waiter, create entry in Waiter collection
+    let waiterRecord = null;
+    if (role === "waiter") {
+      try {
+        waiterRecord = new Waiter({
+          name: `${firstname}`,
+          age: 20, // Default age for waiter
+          phoneNumber: phonenumber,
+          restaurantId: restaurantId,
+          userId: newUser._id, // Link to the user record
+        });
+
+        await waiterRecord.save();
+        console.log("Waiter record created successfully:", waiterRecord._id);
+      } catch (waiterError) {
+        // If waiter creation fails, delete the user and return error
+        await User.findByIdAndDelete(newUser._id);
+        console.error("Failed to create waiter record:", waiterError);
+        return res.status(500).json({
+          error: "Failed to create waiter record. Please try again.",
+        });
+      }
+    }
+
     // Send verification email
     const emailSent = await sendVerificationEmail(
       email,
@@ -94,8 +129,11 @@ exports.signup = async (req, res) => {
     );
 
     if (!emailSent) {
-      // If email sending fails, delete the user and return error
+      // If email sending fails, delete both user and waiter records
       await User.findByIdAndDelete(newUser._id);
+      if (waiterRecord) {
+        await Waiter.findByIdAndDelete(waiterRecord._id);
+      }
       return res
         .status(500)
         .json({
@@ -108,12 +146,20 @@ exports.signup = async (req, res) => {
       email
     );
 
-    res.json({
+    const response = {
       message:
         "User registered successfully. Please check your email for verification code.",
       userId: newUser._id,
       email: email,
-    });
+    };
+
+    // Add waiter ID to response if waiter was created
+    if (waiterRecord) {
+      response.waiterId = waiterRecord._id;
+      response.message += " Waiter profile created automatically.";
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Signup error:", error.message);
     res.status(500).json({ error: error.message });

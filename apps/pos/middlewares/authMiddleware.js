@@ -16,6 +16,7 @@ const protect = async (req, res, next) => {
     
     // Verify the access token
     const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
+    console.log(decoded)
     
     // Check if user exists and token is valid in database
     const user = await User.findById(decoded.userId);

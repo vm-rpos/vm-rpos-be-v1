@@ -2,6 +2,7 @@ const Waiter = require('../models/Waiter');
 const mongoose = require('mongoose');
 const Table=require('../models/Table');
 const section=require('../models/Section')
+const User=require('../models/User')
 
 // Get all waiters
 // exports.getAllWaiters = async (req, res) => {
@@ -88,21 +89,113 @@ exports.getWaiterById = async (req, res) => {
 };
 
 // Update a waiter
+// Update a waiter
 exports.updateWaiter = async (req, res) => {
   try {
     const { name, age, phoneNumber } = req.body;
 
-    const updateData = {};
-    if (name) updateData.name = name;
-    if (age) updateData.age = age;
-    if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    // First, find the waiter record
+    const waiterToUpdate = await Waiter.findById(req.params.id);
+    if (!waiterToUpdate) {
+      return res.status(404).json({ message: 'Waiter not found' });
+    }
 
-    const updatedWaiter = await Waiter.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!updatedWaiter) return res.status(404).json({ message: 'Waiter not found' });
+    // Check if phone number is being updated and if it already exists
+    if (phoneNumber && phoneNumber !== waiterToUpdate.phoneNumber) {
+      const existingWaiter = await Waiter.findOne({ 
+        phoneNumber: phoneNumber,
+        _id: { $ne: req.params.id } // Exclude current waiter
+      });
+      if (existingWaiter) {
+        return res.status(400).json({ message: "Phone number already exists" });
+      }
+    }
 
-    res.json(updatedWaiter);
+    // Prepare update data for waiter
+    const waiterUpdateData = {};
+    if (name) waiterUpdateData.name = name;
+    if (age) waiterUpdateData.age = age;
+    if (phoneNumber) waiterUpdateData.phoneNumber = phoneNumber;
+
+    // Update the waiter record
+    const updatedWaiter = await Waiter.findByIdAndUpdate(
+      req.params.id, 
+      waiterUpdateData, 
+      { new: true }
+    );
+
+    // Find and update the corresponding user record
+    let updatedUser = null;
+    let userToUpdate = null;
+
+    // Try to find user by userId first (if the field exists in waiter record)
+    if (waiterToUpdate.userId) {
+      userToUpdate = await User.findById(waiterToUpdate.userId);
+    } else {
+      // Fallback: find user by phone number and waiter role
+      userToUpdate = await User.findOne({ 
+        phonenumber: waiterToUpdate.phoneNumber,
+        role: 'waiter'
+      });
+    }
+
+    if (userToUpdate) {
+      // Prepare update data for user
+      const userUpdateData = {};
+      
+      // Update phone number if provided
+      if (phoneNumber) {
+        userUpdateData.phonenumber = phoneNumber;
+      }
+      
+      // Update name if provided - split name into firstname and lastname
+      if (name) {
+        const nameParts = name.trim().split(' ');
+        if (nameParts.length >= 2) {
+          userUpdateData.firstname = nameParts[0];
+          userUpdateData.lastname = nameParts.slice(1).join(' ');
+        } else {
+          userUpdateData.firstname = nameParts[0];
+          userUpdateData.lastname = ''; // Set empty if only one name part
+        }
+      }
+
+      // Update user record if there's data to update
+      if (Object.keys(userUpdateData).length > 0) {
+        updatedUser = await User.findByIdAndUpdate(
+          userToUpdate._id,
+          userUpdateData,
+          { new: true }
+        );
+        console.log(`Updated waiter and corresponding user: ${updatedUser.email}`);
+      }
+    } else {
+      console.log(`Waiter updated but no corresponding user found with phone: ${waiterToUpdate.phoneNumber}`);
+    }
+
+    // Prepare response
+    const response = {
+      message: updatedUser ? 
+        'Waiter and associated user account updated successfully' : 
+        'Waiter updated successfully (no corresponding user account found)',
+      waiter: updatedWaiter
+    };
+
+    // Add user info to response if user was updated
+    if (updatedUser) {
+      response.user = {
+        userId: updatedUser._id,
+        email: updatedUser.email,
+        firstname: updatedUser.firstname,
+        lastname: updatedUser.lastname,
+        phonenumber: updatedUser.phonenumber
+      };
+    }
+
+    res.json(response);
+
   } catch (err) {
-    console.error('Error updating waiter:', err);
+    console.error('Error updating waiter and user:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -110,12 +203,62 @@ exports.updateWaiter = async (req, res) => {
 // Delete a waiter
 exports.deleteWaiter = async (req, res) => {
   try {
-    const deletedWaiter = await Waiter.findByIdAndDelete(req.params.id);
-    if (!deletedWaiter) return res.status(404).json({ message: 'Waiter not found' });
+    // First, find the waiter record
+    const waiterToDelete = await Waiter.findById(req.params.id);
+    if (!waiterToDelete) {
+      return res.status(404).json({ message: 'Waiter not found' });
+    }
 
-    res.json({ message: 'Waiter deleted successfully' });
+    // Find the corresponding user record using userId (if it exists) or phone number
+    let userToDelete = null;
+    
+    // Try to find user by userId first (if the field exists in waiter record)
+    if (waiterToDelete.userId) {
+      userToDelete = await User.findById(waiterToDelete.userId);
+    } else {
+      // Fallback: find user by phone number and waiter role
+      userToDelete = await User.findOne({ 
+        phonenumber: waiterToDelete.phoneNumber,
+        role: 'waiter'
+      });
+    }
+
+    // Delete the waiter record
+    const deletedWaiter = await Waiter.findByIdAndDelete(req.params.id);
+
+    // Delete the corresponding user record if found
+    if (userToDelete) {
+      await User.findByIdAndDelete(userToDelete._id);
+      console.log(`Deleted waiter and corresponding user: ${userToDelete.email}`);
+      
+      res.json({ 
+        message: 'Waiter and associated user account deleted successfully',
+        deletedWaiter: {
+          waiterId: deletedWaiter._id,
+          name: deletedWaiter.name,
+          phoneNumber: deletedWaiter.phoneNumber
+        },
+        deletedUser: {
+          userId: userToDelete._id,
+          email: userToDelete.email,
+          name: `${userToDelete.firstname} ${userToDelete.lastname}`
+        }
+      });
+    } else {
+      console.log(`Waiter deleted but no corresponding user found with phone: ${waiterToDelete.phoneNumber}`);
+      
+      res.json({ 
+        message: 'Waiter deleted successfully (no corresponding user account found)',
+        deletedWaiter: {
+          waiterId: deletedWaiter._id,
+          name: deletedWaiter.name,
+          phoneNumber: deletedWaiter.phoneNumber
+        }
+      });
+    }
+
   } catch (err) {
-    console.error('Error deleting waiter:', err);
+    console.error('Error deleting waiter and user:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
