@@ -18,6 +18,12 @@ const waiterSchema = new mongoose.Schema(
       unique: true,
       match: [/^\d{10}$/, "Phone number must be exactly 10 digits"],
     },
+
+    userId: { 
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false, 
+    },
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Restaurant",
