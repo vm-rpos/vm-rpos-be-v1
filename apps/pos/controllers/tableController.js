@@ -472,11 +472,20 @@ exports.clearOrders = async (req, res) => {
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ message: "Table not found" });
 
-    const { paymentMethod, charges = [], subtotal = 0, totalCharges = 0, total = 0 } = req.body;
+    const { paymentMethod, charges = [] } = req.body;
 
     if (!paymentMethod) {
       return res.status(400).json({ message: "Payment method is required" });
     }
+
+    // Calculate subtotal from current table bill amount
+    const subtotal = table.currentBillAmount || 0;
+    
+    // Calculate total charges from charges array
+    const totalCharges = charges.reduce((sum, charge) => sum + (charge.amount || 0), 0);
+    
+    // Calculate final total
+    const total = subtotal + totalCharges;
 
     const billNumber = table.billNumber; // Save before clearing
 
@@ -505,7 +514,6 @@ exports.clearOrders = async (req, res) => {
         firstOrderTime: null,
         waiterId: null,
         waiter: null
-        
       },
       { new: true }
     );
