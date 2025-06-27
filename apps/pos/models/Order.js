@@ -1,4 +1,3 @@
-// models/Order.js
 const mongoose = require('mongoose');
 
 const OrderItemSchema = new mongoose.Schema({
@@ -26,10 +25,14 @@ const OrderItemSchema = new mongoose.Schema({
     required: false
   },
   isCancelled: { type: Boolean, default: false },
-  cancelledReason: { type: String, default: null }
+  cancelledReason: { type: String, default: null },
+  round: {                   // <-- New round field added here
+    type: Number,
+    required: true,
+    default: 1
+  }
 });
 
-// New schema for charges
 const ChargeSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -90,7 +93,6 @@ const OrderSchema = new mongoose.Schema({
     required: false,
   },
   items: [OrderItemSchema],
-  // Add charges field
   charges: [ChargeSchema],
 
   total: {

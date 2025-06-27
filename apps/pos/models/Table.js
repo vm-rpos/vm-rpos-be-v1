@@ -8,6 +8,11 @@ const TableOrderItemSchema = new mongoose.Schema({
   itemId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Item"
+  },
+  round: {
+    type: Number,
+    required: true,
+    default: 1
   }
 });
 
@@ -20,7 +25,6 @@ const WaiterSchema = new mongoose.Schema({
   name: { type: String, required: true },
   phoneNumber: { type: String }
 });
-
 
 const PreferedWaiterSchema = new mongoose.Schema({
   _id: {
@@ -53,7 +57,7 @@ const TableSchema = new mongoose.Schema({
   },
   
   waiter: WaiterSchema, // Added waiter object schema
-  preferedwaiter:PreferedWaiterSchema,
+  preferedwaiter: PreferedWaiterSchema,
   currentOrderItems: [TableOrderItemSchema],
   firstOrderTime: Date,
   currentBillAmount: { type: Number, default: 0 },

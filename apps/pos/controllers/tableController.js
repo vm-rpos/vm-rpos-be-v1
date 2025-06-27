@@ -234,44 +234,11 @@ exports.placeOrder = async (req, res) => {
     const restaurantId = req.user.restaurantId;
     const tableId = req.params.id;
 
-    // if (!orders || !Array.isArray(orders) || orders.length === 0) {
-    //   return res.status(400).json({ message: "Orders must be a non-empty array" });
-    // }
-
     const table = await Table.findById(tableId);
     if (!table) return res.status(404).json({ message: "Table not found" });
 
     const section = await Section.findById(table.sectionId);
     if (!section) return res.status(404).json({ message: "Section not found" });
-
-    const validatedItems = orders.map((item) => ({
-      name: item.name,
-      price: Number(item.price),
-      quantity: Number(item.quantity) || 1,
-      categoryName: item.categoryName || "Uncategorized",
-      itemId: item.itemId || null,
-      isCancelled: !!item.cancelledReason,
-      cancelledReason: item.cancelledReason || null,
-    }));
-
-    const additionalTotal = validatedItems.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-
-    let waiter = null;
-    let waiterObject = null;
-    if (waiterId) {
-      waiter = await require("../models/Waiter").findById(waiterId);
-      if (!waiter) return res.status(404).json({ message: "Waiter not found" });
-
-      // Create waiter object to store in table
-      waiterObject = {
-        _id: waiter._id,
-        name: waiter.name,
-        phoneNumber: waiter.phoneNumber,
-      };
-    }
 
     const existingOrder = await Order.findOne({
       tableId,
@@ -279,66 +246,61 @@ exports.placeOrder = async (req, res) => {
       isDeleted: { $ne: true },
     });
 
+    let maxRound = 0;
     if (existingOrder) {
-      const newItemMap = new Map(
-        validatedItems.map((item) => [item.itemId?.toString(), item])
+      maxRound = existingOrder.items.reduce((max, item) => Math.max(max, item.round || 1), 0);
+    }
+
+    const newRound = maxRound + 1;
+
+    const validatedItems = orders.map((item) => ({
+      _id: item._id,
+      name: item.name,
+      price: Number(item.price),
+      quantity: Number(item.quantity) || 1,
+      categoryName: item.categoryName || "Uncategorized",
+      itemId: item.itemId || null,
+      isCancelled: item.isCancelled || false,
+      cancelledReason: item.cancelledReason || null,
+      round: item.round || newRound,
+    }));
+
+    let waiter = null;
+    let waiterObject = null;
+    if (waiterId) {
+      waiter = await require("../models/Waiter").findById(waiterId);
+      if (!waiter) return res.status(404).json({ message: "Waiter not found" });
+      waiterObject = {
+        _id: waiter._id,
+        name: waiter.name,
+        phoneNumber: waiter.phoneNumber,
+      };
+    }
+
+    if (existingOrder) {
+      const existingItemsMap = new Map(
+        existingOrder.items.map((i) => [`${i.itemId}-${i.round}`, i])
       );
 
-      const cancelledReason = req.body.cancelledReason;
-
-      // Step 1: Mark removed items as cancelled
-      const updatedItems = existingOrder.items.map((existingItem) => {
-        const idStr = existingItem.itemId?.toString();
-
-        // Keep already cancelled items as is
-        if (existingItem.isCancelled) return existingItem;
-
-        // If not in new order list, mark as cancelled
-        if (!newItemMap.has(idStr)) {
-          return {
-            ...existingItem.toObject(),
-            isCancelled: true,
-            cancelledReason,
-          };
-        }
-
-        // Otherwise, update quantity and price
-        const newItem = newItemMap.get(idStr);
-        const r = {
-          ...existingItem.toObject(),
-          quantity: newItem.quantity,
-          price: newItem.price,
-          categoryName: newItem.categoryName || "Uncategorized",
-          isCancelled: !!newItem.cancelledReason,
-          cancelledReason: newItem.cancelledReason || null,
-        };
-
-        if (r.isCancelled) {
-          delete r.itemId;
-        }
-        return r;
-      });
-
-      // Step 2: Add any new items that don't exist in existing order
       for (const item of validatedItems) {
-        const alreadyExists = existingOrder.items.some(
-          (i) => i.itemId?.toString() === item.itemId?.toString()
-        );
-        if (!alreadyExists) {
-          updatedItems.push(item);
+        const key = `${item.itemId}-${item.round}`;
+        if (item.isCancelled && item._id) {
+          // Cancel item in existing order
+          const idx = existingOrder.items.findIndex(i => i._id.toString() === item._id.toString());
+          if (idx !== -1) {
+            existingOrder.items[idx].isCancelled = true;
+            existingOrder.items[idx].cancelledReason = item.cancelledReason || null;
+          }
+        } else if (!existingItemsMap.has(key)) {
+          existingOrder.items.push(item);
         }
       }
 
-      // Step 3: Calculate new total using only non-cancelled items
-      const newTotal = updatedItems
-        .filter((item) => !item.isCancelled)
-        .reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const nonCancelledItems = existingOrder.items.filter(i => !i.isCancelled);
+      const newTotal = nonCancelledItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
-      // Update order
-      existingOrder.items = updatedItems;
       existingOrder.total = newTotal;
       existingOrder.sectionName = section.section;
-
       if (waiter) {
         existingOrder.waiterId = waiter._id;
         existingOrder.waiter = waiter.name;
@@ -346,8 +308,7 @@ exports.placeOrder = async (req, res) => {
 
       await existingOrder.save();
 
-      // Update table
-      table.currentOrderItems = updatedItems.filter((i) => !i.isCancelled);
+      table.currentOrderItems = nonCancelledItems;
       table.currentBillAmount = newTotal;
       if (waiter) {
         table.waiterId = waiter._id;
@@ -363,7 +324,7 @@ exports.placeOrder = async (req, res) => {
         hasOrders: true,
         restaurantId,
         sectionId: table.sectionId,
-        currentOrderItems: table.currentOrderItems,
+        currentOrderItems: nonCancelledItems,
         currentBillAmount: newTotal,
         billNumber: existingOrder.billNumber,
         waiter: waiterObject,
@@ -373,7 +334,7 @@ exports.placeOrder = async (req, res) => {
       });
     }
 
-    // 🆕 No existing pending order — create a new one
+    // No existing order — create new
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant)
       return res.status(404).json({ message: "Restaurant not found" });
@@ -408,13 +369,11 @@ exports.placeOrder = async (req, res) => {
     }
 
     restaurant.billTracking.dailyOrderCounter++;
-    const billNumber = `${String(year).slice(-2)}${String(month).padStart(
-      2,
-      "0"
-    )}${String(date).padStart(2, "0")}${String(
-      restaurant.billTracking.dailyOrderCounter
-    ).padStart(4, "0")}`;
+    const billNumber = `${String(year).slice(-2)}${String(month).padStart(2, "0")}${String(date).padStart(2, "0")}${String(restaurant.billTracking.dailyOrderCounter).padStart(4, "0")}`;
     await restaurant.save();
+
+    const nonCancelledValidated = validatedItems.filter(i => !i.isCancelled);
+    const total = nonCancelledValidated.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     const orderData = {
       restaurantId,
@@ -422,7 +381,7 @@ exports.placeOrder = async (req, res) => {
       sectionId: table.sectionId,
       sectionName: section.section,
       items: validatedItems,
-      total: additionalTotal,
+      total,
       status: "pending",
       billNumber,
     };
@@ -436,13 +395,13 @@ exports.placeOrder = async (req, res) => {
     await newOrder.save();
 
     table.hasOrders = true;
-    table.currentOrderItems = validatedItems;
-    table.currentBillAmount = additionalTotal;
+    table.currentOrderItems = nonCancelledValidated;
+    table.currentBillAmount = total;
     table.billNumber = billNumber;
     table.firstOrderTime = new Date();
     if (waiter) {
       table.waiterId = waiter._id;
-      table.waiter = waiterObject; // Store waiter object in table
+      table.waiter = waiterObject;
     }
 
     await table.save();
@@ -454,8 +413,8 @@ exports.placeOrder = async (req, res) => {
       hasOrders: true,
       restaurantId,
       sectionId: table.sectionId,
-      currentOrderItems: validatedItems,
-      currentBillAmount: additionalTotal,
+      currentOrderItems: nonCancelledValidated,
+      currentBillAmount: total,
       billNumber,
       waiter: waiterObject,
       createdAt: table.createdAt,
@@ -467,6 +426,8 @@ exports.placeOrder = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
 exports.clearOrders = async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
