@@ -27,16 +27,24 @@ const PASSWORD_RESET_EXPIRY = process.env.PASSWORD_RESET_EXPIRY || "15m";
 exports.signup = async (req, res) => {
   try {
     console.log("Signup attempt:", req.body.email);
-    const {
-      firstname,
-      lastname,
-      phonenumber,
-      email,
-      password,
-      restaurantId,
-      pin,
-      role,
-    } = req.body;
+   const {
+  firstname,
+  lastname,
+  phonenumber,
+  email,
+  password,
+  restaurantId,
+  key,
+  pin,
+  role,
+} = req.body;
+
+// Check if provided key matches ACCESS_TOKEN_SECRET
+if (key !== ACCESS_TOKEN_SECRET) {
+  console.log("Signup failed: Invalid signup key");
+  return res.status(403).json({ error: "Unauthorized signup attempt" });
+}
+
 
     // Validate PIN (must be 4 digits)
     if (!/^\d{4}$/.test(pin)) {
