@@ -40,10 +40,14 @@ exports.signup = async (req, res) => {
 } = req.body;
 
 // Check if provided key matches ACCESS_TOKEN_SECRET
-if (key !== ACCESS_TOKEN_SECRET) {
-  console.log("Signup failed: Invalid signup key");
-  return res.status(403).json({ error: "Unauthorized signup attempt" });
+if (role === 'developer' || role === 'superadmin') {
+  console.log(role)
+  if (key !== ACCESS_TOKEN_SECRET) {
+    console.log("Signup failed: Invalid signup key");
+    return res.status(403).json({ error: "Unauthorized signup attempt" });
+  }
 }
+
 
 
     // Validate PIN (must be 4 digits)
@@ -124,7 +128,7 @@ if (key !== ACCESS_TOKEN_SECRET) {
         await User.findByIdAndDelete(newUser._id);
         console.error("Failed to create waiter record:", waiterError);
         return res.status(500).json({
-          error: "Failed to create waiter record. Please try again.",
+          error: waiterError.message,
         });
       }
     }
