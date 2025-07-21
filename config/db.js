@@ -5,7 +5,7 @@ const MONGO_URL = process.env.MONGO_URL;
 const connectDB = async () => {
   try {
     await mongoose.connect(
-       // LOCAL_DB_URL, 
+      // LOCAL_DB_URL, 
      MONGO_URL ,
       {
       useNewUrlParser: true,

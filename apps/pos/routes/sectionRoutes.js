@@ -8,6 +8,8 @@ router.use(protect); // Protect all routes in this file
 router.post('/', sectionController.createSection);
 router.get('/', sectionController.getAllSections);
 router.get('/sectionsWithTables', sectionController.getSectionsWithTables);
+router.get('/all', sectionController.getAllSectionsdata);
+
 router.get('/sectionsWithTablesdata', sectionController.getSectionsWithTablesdata);
 router.get('/sectionslivedata', sectionController.getSectionWithLiveTableData);
 

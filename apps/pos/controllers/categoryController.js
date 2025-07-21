@@ -2,6 +2,106 @@ const Category = require("../models/Category");
 const Item = require("../models/Item");
 const Tag = require("../models/Tag");
 const mongoose = require("mongoose");
+const Section=require('../models/Section')
+
+
+exports.createMultipleCategoriesWithItems = async (req, res) => {
+  try {
+    const { categories } = req.body;
+        req.user.restaurantId='6864c267cc59c91e0eeeb511';
+
+
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+    }
+
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({ message: "Categories data is required and must be an array" });
+    }
+
+    const restaurantId = req.user.restaurantId;
+
+    const allSections = await Section.find({ restaurantId });
+    if (!allSections.length) {
+      return res.status(400).json({ message: "No sections found for this restaurant" });
+    }
+
+    const results = [];
+
+    for (const categoryData of categories) {
+      const { name: categoryName, items } = categoryData;
+
+      if (!categoryName) continue;
+
+      // Check or create category
+      let category = await Category.findOne({ name: categoryName, restaurantId });
+      if (!category) {
+        const last = await Category.findOne({ restaurantId }).sort({ index: -1 });
+        const index = last?.index >= 0 ? last.index + 1 : 0;
+        category = new Category({ name: categoryName, restaurantId, index });
+        await category.save();
+      }
+
+      const createdItems = [];
+
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          const { name: itemName, description = "", price, sectionId } = item;
+
+          if (!itemName || price == null) continue;
+
+          // Avoid duplicate item in category
+          const existingItem = await Item.findOne({ name: itemName, categoryId: category._id, restaurantId });
+          if (existingItem) continue;
+
+          let sectionData = [];
+
+          if (sectionId) {
+            const section = allSections.find(sec => sec._id.toString() === sectionId);
+            if (!section) continue;
+
+            sectionData.push({
+              id: section._id,
+              name: section.section,
+              isAvailable: true,
+              price
+            });
+          } else {
+            sectionData = allSections.map(section => ({
+              id: section._id,
+              name: section.section,
+              isAvailable: true,
+              price
+            }));
+          }
+
+          const newItem = new Item({
+            name: itemName,
+            description,
+            categoryId: category._id,
+            categoryName: category.name,
+            restaurantId,
+            sectionData,
+          });
+
+          await newItem.save();
+          createdItems.push(newItem);
+        }
+      }
+
+      results.push({
+        category: { _id: category._id, name: category.name },
+        items: createdItems,
+      });
+    }
+
+    res.status(201).json({ message: "Categories and items created successfully", data: results });
+
+  } catch (error) {
+    console.error("Error in createMultipleCategoriesWithItems:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 
 
@@ -409,3 +509,5 @@ exports.deleteItemFromCategory = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+

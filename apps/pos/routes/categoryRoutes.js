@@ -6,6 +6,7 @@ const protect = require('../middlewares/authMiddleware')
 router.use(protect); // Protect all routes in this file
 
 // Category routes
+router.post('/all',categoryController.createMultipleCategoriesWithItems);
 router.get('/', categoryController.getAllCategories);
 router.post('/', categoryController.createCategory);
 

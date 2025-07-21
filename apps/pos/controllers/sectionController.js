@@ -2,6 +2,22 @@ const Section = require("../models/Section");
 const Table = require("../models/Table");
 
 // Get all sections for the user's restaurant
+exports.getAllSectionsdata = async (req, res) => {
+  try {
+    
+    const restaurantId = req.query.restaurantId;
+
+    const sections = await Section.find({ restaurantId })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(sections);
+  } catch (err) {
+    console.error("Error fetching sections:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// Get all sections for the user's restaurant
 exports.getAllSections = async (req, res) => {
   try {
     if (!req.user || !req.user.restaurantId) {
