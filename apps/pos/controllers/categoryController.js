@@ -7,20 +7,20 @@ const Section=require('../models/Section')
 
 exports.createMultipleCategoriesWithItems = async (req, res) => {
   try {
-    const { categories } = req.body;
-        req.user.restaurantId='6864c267cc59c91e0eeeb511';
+    // Extract payload
+    const { restaurantId, categories } = req.body;
 
-
-    if (!req.user || !req.user.restaurantId) {
-      return res.status(403).json({ message: "Unauthorized: No restaurant assigned" });
+    // Validate restaurantId
+    if (!restaurantId) {
+      return res.status(400).json({ message: "restaurantId is required in payload" });
     }
 
+    // Validate categories array
     if (!Array.isArray(categories) || categories.length === 0) {
       return res.status(400).json({ message: "Categories data is required and must be an array" });
     }
 
-    const restaurantId = req.user.restaurantId;
-
+    // Fetch sections for this restaurant
     const allSections = await Section.find({ restaurantId });
     if (!allSections.length) {
       return res.status(400).json({ message: "No sections found for this restaurant" });
@@ -50,7 +50,7 @@ exports.createMultipleCategoriesWithItems = async (req, res) => {
 
           if (!itemName || price == null) continue;
 
-          // Avoid duplicate item in category
+          // Avoid duplicate item in the same category
           const existingItem = await Item.findOne({ name: itemName, categoryId: category._id, restaurantId });
           if (existingItem) continue;
 
@@ -67,6 +67,7 @@ exports.createMultipleCategoriesWithItems = async (req, res) => {
               price
             });
           } else {
+            // Apply price to all sections
             sectionData = allSections.map(section => ({
               id: section._id,
               name: section.section,
@@ -102,6 +103,7 @@ exports.createMultipleCategoriesWithItems = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 
