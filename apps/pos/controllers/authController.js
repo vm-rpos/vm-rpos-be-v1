@@ -18,6 +18,7 @@ const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "5h";
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
 const MAX_TOKENS_PER_USER = process.env.MAX_TOKENS_PER_USER || 5;
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "Zaikatech";
+const PRIVATE_SECURE_ACCOUNTKEY="AkhilGangavarapu";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "Zaikatech";
 const EMAIL_VERIFICATION_EXPIRY =
   process.env.EMAIL_VERIFICATION_EXPIRY || "10m";
@@ -42,7 +43,7 @@ exports.signup = async (req, res) => {
 // Check if provided key matches ACCESS_TOKEN_SECRET
 if (role === 'developer' || role === 'superadmin') {
   console.log(role)
-  if (key !== ACCESS_TOKEN_SECRET) {
+  if (key !== PRIVATE_SECURE_ACCOUNTKEY) {
     console.log("Signup failed: Invalid signup key");
     return res.status(403).json({ error: "Unauthorized signup attempt" });
   }
