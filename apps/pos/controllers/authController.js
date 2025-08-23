@@ -1,5 +1,5 @@
 const User = require("../models/User");
-const Waiter = require('../models/Waiter');
+const Waiter = require("../models/Waiter");
 
 const {
   generateTokens,
@@ -9,7 +9,55 @@ const {
   generateVerificationCode,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  transporter,
 } = require("../../../utils/emailUtils");
+
+// Send registration email
+const sendRegistrationEmail = async (email, firstname) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject: "Registration Successful - Restaurant POS System",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px; text-align: center;">
+            <h2 style="color: #333; margin-bottom: 20px;">Registration Successful!</h2>
+            <p style="color: #666; font-size: 16px; margin-bottom: 30px;">
+              Hi ${firstname || "User"},<br>
+              Your account has been successfully registered in the Restaurant POS System.
+            </p>
+            <div style="background-color: #28a745; color: white; padding: 20px; border-radius: 8px; margin: 30px 0;">
+              <h3 style="margin: 0;">Account Details</h3>
+              <p style="margin: 10px 0 0 0; font-size: 14px;">
+                Email: ${email}<br>
+                Role: Admin<br>
+                Default Password: Password@123<br>
+                Default PIN: 0000
+              </p>
+            </div>
+            <p style="color: #666; font-size: 16px; margin: 20px 0;">
+              You can now login to your account using your email and the default password.<br>
+              Please change your password and PIN after your first login for security.
+            </p>
+            <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin-top: 20px;">
+              <p style="color: #856404; font-size: 14px; margin: 0;">
+                <strong>Security Note:</strong> Please change your default password and PIN immediately after your first login.
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Registration email sent:", info.messageId);
+    return true;
+  } catch (error) {
+    console.error("Error sending registration email:", error);
+    return false;
+  }
+};
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const ms = require("ms");
@@ -18,7 +66,7 @@ const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "5h";
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
 const MAX_TOKENS_PER_USER = process.env.MAX_TOKENS_PER_USER || 5;
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "Zaikatech";
-const PRIVATE_SECURE_ACCOUNTKEY="AkhilGangavarapu";
+const PRIVATE_SECURE_ACCOUNTKEY = "AkhilGangavarapu";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "Zaikatech";
 const EMAIL_VERIFICATION_EXPIRY =
   process.env.EMAIL_VERIFICATION_EXPIRY || "10m";
@@ -28,28 +76,26 @@ const PASSWORD_RESET_EXPIRY = process.env.PASSWORD_RESET_EXPIRY || "15m";
 exports.signup = async (req, res) => {
   try {
     console.log("Signup attempt:", req.body.email);
-   const {
-  firstname,
-  lastname,
-  phonenumber,
-  email,
-  password,
-  restaurantId,
-  key,
-  pin,
-  role,
-} = req.body;
+    const {
+      firstname,
+      lastname,
+      phonenumber,
+      email,
+      password,
+      restaurantId,
+      key,
+      pin,
+      role,
+    } = req.body;
 
-// Check if provided key matches ACCESS_TOKEN_SECRET
-if (role === 'developer' || role === 'superadmin') {
-  console.log(role)
-  if (key !== PRIVATE_SECURE_ACCOUNTKEY) {
-    console.log("Signup failed: Invalid signup key");
-    return res.status(403).json({ error: "Unauthorized signup attempt" });
-  }
-}
-
-
+    // Check if provided key matches ACCESS_TOKEN_SECRET
+    if (role === "developer" || role === "superadmin") {
+      console.log(role);
+      if (key !== PRIVATE_SECURE_ACCOUNTKEY) {
+        console.log("Signup failed: Invalid signup key");
+        return res.status(403).json({ error: "Unauthorized signup attempt" });
+      }
+    }
 
     // Validate PIN (must be 4 digits)
     if (!/^\d{4}$/.test(pin)) {
@@ -60,12 +106,14 @@ if (role === 'developer' || role === 'superadmin') {
     // Validate role
     if (
       !role ||
-      !["admin", "pos", "ivm", "superadmin", "salesadmin","waiter"].includes(role)
+      !["admin", "pos", "ivm", "superadmin", "salesadmin", "waiter"].includes(
+        role
+      )
     ) {
       console.log("Signup failed: Invalid role");
-      return res
-        .status(400)
-        .json({ error: "Role must be either 'admin' or 'pos' or 'ivm' or 'waiter' " });
+      return res.status(400).json({
+        error: "Role must be either 'admin' or 'pos' or 'ivm' or 'waiter' ",
+      });
     }
 
     const userExists = await User.findOne({ email });
@@ -78,7 +126,9 @@ if (role === 'developer' || role === 'superadmin') {
     if (role === "waiter") {
       const existingWaiter = await Waiter.findOne({ phoneNumber: phonenumber });
       if (existingWaiter) {
-        console.log("Signup failed: Phone number already exists in waiter records");
+        console.log(
+          "Signup failed: Phone number already exists in waiter records"
+        );
         return res.status(400).json({ error: "Phone number already exists" });
       }
     }
@@ -147,11 +197,9 @@ if (role === 'developer' || role === 'superadmin') {
       if (waiterRecord) {
         await Waiter.findByIdAndDelete(waiterRecord._id);
       }
-      return res
-        .status(500)
-        .json({
-          error: "Failed to send verification email. Please try again.",
-        });
+      return res.status(500).json({
+        error: "Failed to send verification email. Please try again.",
+      });
     }
 
     console.log(
@@ -179,6 +227,95 @@ if (role === 'developer' || role === 'superadmin') {
   }
 };
 
+// Register - Simple registration with default values
+exports.register = async (req, res) => {
+  try {
+    console.log("Register attempt:", req.body.email);
+
+    const { name, email, phone } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !phone) {
+      console.log("Register failed: Missing required fields");
+      return res
+        .status(400)
+        .json({ error: "Name, email, and phone are required" });
+    }
+
+    // Check if user already exists
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      console.log("Register failed: Email already exists");
+      return res.status(400).json({ error: "Email already in use" });
+    }
+
+    // Set default values
+    const firstname = name;
+    const phonenumber = phone;
+    const password = "Password@123";
+    const restaurantId = "";
+    const pin = "0000";
+    const role = "admin";
+
+    // Hash password and PIN
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPin = await bcrypt.hash(pin, 10);
+
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    const verificationExpiry = new Date(
+      Date.now() + ms(EMAIL_VERIFICATION_EXPIRY)
+    );
+
+    // Create new user
+    const newUser = new User({
+      firstname,
+      lastname: "", // Empty lastname as per requirements
+      phonenumber,
+      email,
+      password: hashedPassword,
+      restaurantId,
+      pin: hashedPin,
+      role,
+      refreshTokens: [],
+      isEmailVerified: false,
+      emailVerificationCode: verificationCode,
+      emailVerificationExpiry: verificationExpiry,
+      isActive: false,
+    });
+
+    await newUser.save();
+
+    // Send registration email
+    const emailSent = await sendRegistrationEmail(email, firstname);
+
+    if (!emailSent) {
+      // If email sending fails, delete the user
+      await User.findByIdAndDelete(newUser._id);
+      return res.status(500).json({
+        error: "Failed to send registration email. Please try again.",
+      });
+    }
+
+    console.log("User registered successfully:", email);
+
+    res.json({
+      message: "User registered successfully. Registration email sent.",
+      userId: newUser._id,
+      email: email,
+      user: {
+        _id: newUser._id,
+        email: newUser.email,
+        firstname: newUser.firstname,
+        role: newUser.role,
+      },
+    });
+  } catch (error) {
+    console.error("Register error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Email Verification - Step 2: Verify the 6-digit code
 exports.verifyEmail = async (req, res) => {
   try {
@@ -201,11 +338,9 @@ exports.verifyEmail = async (req, res) => {
 
     // Check if verification code has expired
     if (new Date() > user.emailVerificationExpiry) {
-      return res
-        .status(400)
-        .json({
-          error: "Verification code has expired. Please request a new one.",
-        });
+      return res.status(400).json({
+        error: "Verification code has expired. Please request a new one.",
+      });
     }
 
     // Verify the code
@@ -279,11 +414,9 @@ exports.resendVerificationCode = async (req, res) => {
     );
 
     if (!emailSent) {
-      return res
-        .status(500)
-        .json({
-          error: "Failed to send verification email. Please try again.",
-        });
+      return res.status(500).json({
+        error: "Failed to send verification email. Please try again.",
+      });
     }
 
     res.json({
@@ -338,11 +471,9 @@ exports.forgotPassword = async (req, res) => {
     );
 
     if (!emailSent) {
-      return res
-        .status(500)
-        .json({
-          error: "Failed to send password reset email. Please try again.",
-        });
+      return res.status(500).json({
+        error: "Failed to send password reset email. Please try again.",
+      });
     }
 
     console.log("Password reset email sent:", user.email);

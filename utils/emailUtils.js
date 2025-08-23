@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
 // Create transporter
 const transporter = nodemailer.createTransport({
@@ -22,13 +22,13 @@ const sendVerificationEmail = async (email, code, firstname) => {
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: email,
-      subject: 'Email Verification - Restaurant POS System',
+      subject: "Email Verification - Restaurant POS System",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px; text-align: center;">
             <h2 style="color: #333; margin-bottom: 20px;">Welcome to Restaurant POS System!</h2>
             <p style="color: #666; font-size: 16px; margin-bottom: 30px;">
-              Hi ${firstname || 'User'},<br>
+              Hi ${firstname || "User"},<br>
               Please verify your email address to complete your registration.
             </p>
             <div style="background-color: #007bff; color: white; padding: 20px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 30px 0;">
@@ -44,10 +44,10 @@ const sendVerificationEmail = async (email, code, firstname) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Verification email sent:', info.messageId);
+    console.log("Verification email sent:", info.messageId);
     return true;
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error("Error sending verification email:", error);
     return false;
   }
 };
@@ -58,13 +58,13 @@ const sendPasswordResetEmail = async (email, code, firstname) => {
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: email,
-      subject: 'Password Reset - Restaurant POS System',
+      subject: "Password Reset - Restaurant POS System",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px; text-align: center;">
             <h2 style="color: #333; margin-bottom: 20px;">Password Reset Request</h2>
             <p style="color: #666; font-size: 16px; margin-bottom: 30px;">
-              Hi ${firstname || 'User'},<br>
+              Hi ${firstname || "User"},<br>
               We received a request to reset your password for your Restaurant POS System account.
             </p>
             <div style="background-color: #dc3545; color: white; padding: 20px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 30px 0;">
@@ -88,10 +88,10 @@ const sendPasswordResetEmail = async (email, code, firstname) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Password reset email sent:', info.messageId);
+    console.log("Password reset email sent:", info.messageId);
     return true;
   } catch (error) {
-    console.error('Error sending password reset email:', error);
+    console.error("Error sending password reset email:", error);
     return false;
   }
 };
@@ -100,4 +100,5 @@ module.exports = {
   generateVerificationCode,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  transporter,
 };

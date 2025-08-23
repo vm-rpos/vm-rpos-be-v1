@@ -1,20 +1,22 @@
 const express = require("express");
-const { 
-  signup, 
-  login, 
-  verifyPin, 
-  refreshToken, 
+const {
+  signup,
+  register,
+  login,
+  verifyPin,
+  refreshToken,
   logout,
   verifyEmail,
   resendVerificationCode,
   forgotPassword,
-  resetPassword
+  resetPassword,
 } = require("../controllers/authController");
 
 const router = express.Router();
 
 // Authentication routes
 router.post("/signup", signup);
+router.post("/register", register);
 router.post("/verify-email", verifyEmail);
 router.post("/resend-verification", resendVerificationCode);
 router.post("/login", login);
