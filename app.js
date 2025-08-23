@@ -28,6 +28,8 @@ const superroutes = require("./apps/pos/routes/superRoutes");
 const groupRoutes = require("./apps/pos/routes/groupRoutes");
 
 const mobileRoutes = require("./apps/pos/routes/mobileRoutes");
+const whatsappRoutes = require("./apps/pos/routes/whatsappRoutes");
+const whatsappService = require("./utils/whatsappService");
 
 require("dotenv").config();
 const app = express();
@@ -47,6 +49,15 @@ app.use("/uploads", express.static("uploads"));
 // Connect to MongoDB
 connectDB();
 
+// Initialize WhatsApp service
+whatsappService.initialize().then((result) => {
+  if (result.success) {
+    console.log("WhatsApp service initialized successfully");
+  } else {
+    console.log("WhatsApp service initialization failed:", result.error);
+  }
+});
+
 // POS API Routes
 app.use("/api/tables", tableRoutes);
 app.use("/api/categories", categoryRoutes);
@@ -61,6 +72,7 @@ app.use("/api/super", superroutes);
 app.use("/api/groups", groupRoutes);
 
 app.use("/api/mobile", mobileRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
 
 // Inventory API Routes
 app.use("/api-ivm/categories", categoryIvmRoutes); //done
