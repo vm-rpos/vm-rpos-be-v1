@@ -66,7 +66,6 @@ exports.getAllRestaurants = async (req, res) => {
             city: restaurant.location?.city,
             zip: restaurant.location?.zip,
             state: restaurant.location?.state,
-            
           },
           contact: {
             phone: restaurant.contact?.phone,
@@ -112,7 +111,7 @@ exports.getRestaurantById = async (req, res) => {
 
 exports.createRestaurant = async (req, res) => {
   try {
-    const userId = req.userId || req.body.userId;
+    const userId = req.user.id || req.body.userId;
 
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       throw new Error("Invalid user ID");
@@ -127,10 +126,10 @@ exports.createRestaurant = async (req, res) => {
 
     await newRestaurant.save();
 
-    // Update User
+    // Update User with restaurantId
     await User.findByIdAndUpdate(
       userId,
-      { $addToSet: { restaurantIds: newRestaurant._id } },
+      { restaurantId: newRestaurant._id.toString() },
       { new: true }
     );
 
@@ -161,7 +160,6 @@ exports.createRestaurant = async (req, res) => {
     });
   }
 };
-
 
 exports.uploadQrImage = async (req, res) => {
   const restaurantId = req.params.id;
@@ -210,15 +208,19 @@ exports.updateRestaurant = async (req, res) => {
       const value = updateFields[key];
 
       // Handle nested objects like location and contact
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
         for (const nestedKey in value) {
-          if (value[nestedKey] !== undefined && value[nestedKey] !== '') {
+          if (value[nestedKey] !== undefined && value[nestedKey] !== "") {
             restaurant[key][nestedKey] = value[nestedKey];
           }
         }
       } else {
         // For top-level fields
-        if (value !== undefined && value !== '') {
+        if (value !== undefined && value !== "") {
           restaurant[key] = value;
         }
       }
@@ -232,7 +234,6 @@ exports.updateRestaurant = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 // Delete a restaurant
 exports.deleteRestaurant = async (req, res) => {
